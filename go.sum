@@ -1,0 +1,6 @@
+github.com/2dprototype/wui v0.0.1 h1:K8jmWd8FTrEhmLQdD2Dr8k2xeSelJEMh1R50l+bBV1w=
+github.com/2dprototype/wui v0.0.1/go.mod h1:XhI29/h8DxBEFtmQu7E54ZLToOUMQryT2AetpQm3FCo=
+github.com/gonutz/check v1.2.0 h1:PVjoa4xwUU0XAH4/6mdg4kJ9BCCTIiwmBxImLJxCkp8=
+github.com/gonutz/check v1.2.0/go.mod h1:J5ndBcNQd4fv3I+Moevk4PXZoyXRamwwclm6dDgAuyA=
+github.com/gonutz/w32/v2 v2.12.1 h1:ZTWg6ZlETDfWK1Qxx+rdWQdQWZwfhiXoyvxzFYdgsUY=
+github.com/gonutz/w32/v2 v2.12.1/go.mod h1:MgtHx0AScDVNKyB+kjyPder4xIi3XAcHS6LDDU2DmdE=
