@@ -759,17 +759,11 @@ func updateHourlyTable() {
 
 		switch {
 		case sunAngle <= 0:
-			sunAngleStr = "🌙 Night"
+			sunAngleStr = fmt.Sprintf("🌙 %.1f°", sunAngle)      // Night
 		case sunAngle < 8:
-			sunAngleStr = fmt.Sprintf("%.1f° 🌄", sunAngle)
-		case sunAngle < 20:
-			sunAngleStr = fmt.Sprintf("%.1f° 📸", sunAngle)
-		case sunAngle < 35:
-			sunAngleStr = fmt.Sprintf("%.1f° 🌈", sunAngle)
-		case sunAngle < 42:
-			sunAngleStr = fmt.Sprintf("%.1f° ⚠️", sunAngle)
+			sunAngleStr = fmt.Sprintf("🌤️ %.1f°", sunAngle)     // Dawn/day but low angle
 		default:
-			sunAngleStr = fmt.Sprintf("%.1f° 🔥", sunAngle)
+			sunAngleStr = fmt.Sprintf("☀️ %.1f°", sunAngle)      // Full day
 		}
 		
 		// Get rainbow score if applicable
@@ -793,11 +787,29 @@ func updateDailyTable() {
 	}
 	
 	dailyData := extractDailyData(weatherCache)
-	
+	tzOff := float64(weatherCache.UTC_Offset_Seconds) / 3600
+	lat := weatherCache.Latitude
+	lon := weatherCache.Longitude
+
 	dailyTable.Clear()
 	now := time.Now()
 	
 	for _, day := range dailyData {
+		// 1. Get hourly data for THIS specific day
+		dayHourly := extractHourlyDataForDay(weatherCache, day.Date)
+		
+		// 2. Predict rainbows for those 24 hours
+		// Set includePast to true so we get scores for the whole day
+		rainbows := predictRainbow(dayHourly, lat, lon, tzOff, true)
+		
+		rainbowStr := "-"
+		if len(rainbows) > 0 {
+			// predictRainbow returns results sorted by Score descending
+			// so the first element is the daily best.
+			rainbowStr = fmt.Sprintf("%d%% 🌈", rainbows[0].Score)
+		}
+
+		// UI formatting
 		var dayStr, dateStr string
 		isPast := day.Date.Before(now.AddDate(0, 0, -1))
 		isToday := day.Date.Format("2006-01-02") == now.Format("2006-01-02")
@@ -812,7 +824,6 @@ func updateDailyTable() {
 			dayStr = day.Date.Format("Mon")
 			dateStr = day.Date.Format("02/01/06")
 		}
-		
 		icon, _ := weatherInfo(day.WeatherCode)
 		high := formatTemp(day.TemperatureMax)
 		low := formatTemp(day.TemperatureMin)
@@ -822,10 +833,7 @@ func updateDailyTable() {
 		dailyTable.SetCell(1, row, dayStr)
 		dailyTable.SetCell(2, row, icon)
 		dailyTable.SetCell(3, row, fmt.Sprintf("%s / %s", high, low))
-		dailyTable.SetCell(4, row, fmt.Sprintf("%.0f%%", day.PrecipitationMax))
-		
-		// Store the date string to be used for selection parsing
-		_ = day.Date.Format("2006-01-02") 
+		dailyTable.SetCell(4, row, rainbowStr) // Now displays Rainbow score instead of Precip
 	}
 }
 
@@ -915,12 +923,13 @@ func onSearchComboChange(index int) {
 	selected := searchItems[index]
 	searchItems = nil
 	updateSearchCombo()
-	searchEdit.SetText("")
 	searchCombo.SetVisible(false)
 	currentLat = selected.Lat
 	currentLon = selected.Lon
 	locationName = selected.Name
 	countryName = selected.Country
+	// searchEdit.SetText("")
+	searchEdit.SetText(locationName + ", " + countryName)
 	
 	// Reset selected day when changing location
 	selectedDayData = nil
@@ -983,12 +992,49 @@ func updateData() {
 	})
 }
 
+func showRainbowFormula() {
+	
+text := `A rainbow requires three conditions:
+   1. Sun behind you (angle 0°-42°)
+   2. Rain in front of you
+   3. Sunlight not completely blocked
+
+SUN ELEVATION SCORE (max 30)
+   - Optimal range: 5°-35° (peaks at ~20°)
+   - Outside optimal: reduced score
+   - Sun below 0° or above 42° → impossible
+
+PRECIPITATION SCORE (max 40)
+   - 30-70% chance: full 40 points
+   - >70% chance: 30 points (too heavy blocks sun)
+   - <30% chance: scales linearly 0-20 points
+
+CLOUD COVER SCORE (max 30)
+   - 30-70% cover: full 30 points
+   - 70-90% cover: 15 points
+   - >90% cover: 0 points (sun blocked)
+   - <30% cover: scales linearly 0-15 points
+
+STRICT PENALTIES:
+   - Cloud cover >95% → score × 0.1 (sun completely blocked)
+   - Precipitation <10% → score × 0.1 (not enough moisture)
+
+SCALE:
+   - 90-98% : Excellent chance
+   - 70-89% : Good chance
+   - 40-69% : Possible
+   - 10-39% : Unlikely
+   - <10%    : Not shown`
+
+		wui.MessageBox("Rainbow Formula Calculation", text)	
+}
+
 func createUI() {
 	windowFont, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -11})
 	mainWindow = wui.NewWindow()
 	mainWindow.SetFont(windowFont)
 	
-	mainWindow.SetInnerSize(650, 420)
+	mainWindow.SetInnerSize(650, 425)
 	mainWindow.SetPosition(200, 70)
 	mainWindow.SetResizable(false)
 	mainWindow.SetHasMaxButton(false)
@@ -1003,42 +1049,48 @@ func createUI() {
 	mainWindow.Add(logo)
 
 	searchEdit = wui.NewEditLine()
-	searchEdit.SetBounds(405, 12, 140, 24)
+	searchEdit.SetBounds(405, 12, 145, 24)
 	searchEdit.SetText("")
 	searchEdit.SetOnTextChange(onSearchEditChange)
 	mainWindow.Add(searchEdit)
 
 	searchCombo = wui.NewComboBox()
-	searchCombo.SetBounds(405, 38, 140, 100)
+	searchCombo.SetBounds(405, 38, 145, 100)
 	searchCombo.SetVisible(false)
 	searchCombo.SetOnChange(onSearchComboChange)
 	mainWindow.Add(searchCombo)
 
 	buttonSearch := wui.NewButton()
-	buttonSearch.SetBounds(550, 12, 55, 24)
+	buttonSearch.SetBounds(555, 12, 55, 24)
 	buttonSearch.SetText("Search")
 	buttonSearch.SetOnClick(func() { onSearchEditChange() })
 	mainWindow.Add(buttonSearch)
 
 	btnGeo = wui.NewButton()
-	btnGeo.SetBounds(610, 12, 28, 24)
+	btnGeo.SetBounds(615, 12, 28, 24)
+	btnGeo.SetText("📍")
+	btnGeo.SetOnClick(onGeoClick)
+	mainWindow.Add(btnGeo)
+
+	btnGeo = wui.NewButton()
+	btnGeo.SetBounds(615, 12, 28, 24)
 	btnGeo.SetText("📍")
 	btnGeo.SetOnClick(onGeoClick)
 	mainWindow.Add(btnGeo)
 
 	// Current weather section
 	labelMainIcon = wui.NewLabel()
-	labelMainIcon.SetBounds(10, 45, 50, 50)
+	labelMainIcon.SetBounds(10, 45, 40, 50)
 	fontIcon, _ := wui.NewFont(wui.FontDesc{Name: "Segoe UI Emoji", Height: 30})
 	labelMainIcon.SetFont(fontIcon)
 	labelMainIcon.SetText("☀️")
 	mainWindow.Add(labelMainIcon)
 
 	labelMainTemp = wui.NewLabel()
-	labelMainTemp.SetBounds(60, 45, 80, 50)
+	labelMainTemp.SetBounds(50, 45, 90, 50)
 	fontTemp, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -28, Bold: true})
 	labelMainTemp.SetFont(fontTemp)
-	labelMainTemp.SetText("--°")
+	labelMainTemp.SetText("  °")
 	mainWindow.Add(labelMainTemp)
 
 	labelMainFeels = wui.NewLabel()
@@ -1151,6 +1203,16 @@ func createUI() {
 		featureLabels[def.name+"Badge"] = badge
 		mainWindow.Add(badge)
 	}
+	
+	btnHelp := wui.NewButton()
+	btnHelp.SetBounds(80, 120, 14, 14)
+	font, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -10, Bold: false})
+	btnHelp.SetFont(font)
+	btnHelp.SetText("?")
+	btnHelp.SetOnClick(func() {
+		showRainbowFormula()
+	})
+	mainWindow.Add(btnHelp)
 
 	// Hourly table
 	labelHourly := wui.NewLabel()
@@ -1172,8 +1234,8 @@ func createUI() {
 	mainWindow.Add(labelDaily)
 
 	// Separated Day and Date into two columns
-	dailyTable = wui.NewStringTable("📅 Date", "✅ Day", "Icon", "High / Low", "Precip")
-	dailyTable.SetBounds(330, 275, 310, 135)
+	dailyTable = wui.NewStringTable("📅 Date", "✅ Day", "Icon", "High / Low", "Rainbow")
+	dailyTable.SetBounds(330, 275, 315, 135)
 	dailyTable.SetOnSelectionChange(onDailyTableSelection)
 	mainWindow.Add(dailyTable)
 }
