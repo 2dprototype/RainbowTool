@@ -168,6 +168,10 @@ var (
 	editLon       *wui.EditLine
 	btnUpdateLoc  *wui.Button
 	checkVerified *wui.CheckBox
+
+	// themes
+	themeCombo *wui.ComboBox
+	themeItems []string
 )
 
 type geocodingItem struct {
@@ -1115,23 +1119,41 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		} else {
 			hourlyData = extractHourlyDataForDay(weatherCache, time.Now())
 		}
-		
-		rainbowPreds := predictRainbow(hourlyData, lat, lon, tzOff, true)
-		bestTime := time.Now()
-		if len(rainbowPreds) > 0 {
-			bestTime = rainbowPreds[0].Time
-		}
-		
-		found := false
-		for _, hd := range hourlyData {
-			if hd.Time.Equal(bestTime) {
-				targetHour = hd
-				found = true
-				break
+
+		// DEFAULT: Show current hour if it's today, otherwise show best rainbow
+		isToday := selectedDate == "today" || selectedDate == "" || (selectedDayData != nil && selectedDayData.Date.Format("2006-01-02") == time.Now().Format("2006-01-02"))
+
+		if isToday {
+			now := time.Now()
+			found := false
+			for _, hd := range hourlyData {
+				if hd.Time.Hour() == now.Hour() {
+					targetHour = hd
+					found = true
+					break
+				}
 			}
-		}
-		if !found && len(hourlyData) > 0 {
-			targetHour = hourlyData[0]
+			if !found && len(hourlyData) > 0 {
+				targetHour = hourlyData[0]
+			}
+		} else {
+			rainbowPreds := predictRainbow(hourlyData, lat, lon, tzOff, true)
+			bestTime := time.Now()
+			if len(rainbowPreds) > 0 {
+				bestTime = rainbowPreds[0].Time
+			}
+
+			found := false
+			for _, hd := range hourlyData {
+				if hd.Time.Equal(bestTime) {
+					targetHour = hd
+					found = true
+					break
+				}
+			}
+			if !found && len(hourlyData) > 0 {
+				targetHour = hourlyData[0]
+			}
 		}
 	}
 	
@@ -1404,6 +1426,58 @@ func createUI() {
 	mainWindow.SetHasMaxButton(false)
 	mainWindow.SetTitle("Rainbow Tool")
 
+	loadThemes := func() {
+		exePath, _ := os.Executable()
+		exeDir := filepath.Dir(exePath)
+		schemesDir := filepath.Join(exeDir, "schemes")
+		files, err := os.ReadDir(schemesDir)
+		if err != nil {
+			return
+		}
+
+		themeCombo.Clear()
+		themeItems = nil
+		for _, f := range files {
+			if !f.IsDir() && strings.HasSuffix(strings.ToLower(f.Name()), ".json") {
+				name := strings.TrimSuffix(f.Name(), filepath.Ext(f.Name()))
+				themeItems = append(themeItems, f.Name())
+				themeCombo.AddItem(name)
+			}
+		}
+	}
+
+	applyTheme := func(index int) {
+		if index < 0 || index >= len(themeItems) {
+			return
+		}
+		exePath, _ := os.Executable()
+		exeDir := filepath.Dir(exePath)
+		themePath := filepath.Join(exeDir, "schemes", themeItems[index])
+
+		data, err := os.ReadFile(themePath)
+		if err != nil {
+			return
+		}
+
+		var newConfig AppConfig
+		if err := json.Unmarshal(data, &newConfig); err != nil {
+			return
+		}
+
+		// Keep existing verifications
+		oldVerifications := appConfig.Verifications
+		appConfig = newConfig
+		appConfig.Verifications = oldVerifications
+
+		saveConfig()
+		if mainCanvas != nil {
+			mainCanvas.Paint()
+		}
+		if colorCanvas != nil {
+			colorCanvas.Paint()
+		}
+	}
+
 	// Header row
 	logo := wui.NewLabel()
 	logo.SetBounds(10, 10, 150, 24)
@@ -1413,28 +1487,19 @@ func createUI() {
 	mainWindow.Add(logo)
 
 	// LAT/LON inputs (moved to left side, where search used to be)
-	latLabel := wui.NewLabel()
-	latLabel.SetBounds(180, 12, 25, 24)
-	latLabel.SetText("Lat:")
-	mainWindow.Add(latLabel)
 
 	editLat = wui.NewEditLine()
-	editLat.SetBounds(210, 12, 70, 24)
+	editLat.SetBounds(285, 12, 50, 20)
 	editLat.SetText("40.71")
 	mainWindow.Add(editLat)
 
-	lonLabel := wui.NewLabel()
-	lonLabel.SetBounds(285, 12, 25, 24)
-	lonLabel.SetText("Lon:")
-	mainWindow.Add(lonLabel)
-
 	editLon = wui.NewEditLine()
-	editLon.SetBounds(315, 12, 70, 24)
+	editLon.SetBounds(340, 12, 50, 20)
 	editLon.SetText("-74.00")
 	mainWindow.Add(editLon)
 
 	btnUpdateLoc = wui.NewButton()
-	btnUpdateLoc.SetBounds(390, 12, 40, 24)
+	btnUpdateLoc.SetBounds(395, 12, 40, 22)
 	btnUpdateLoc.SetText("Go")
 	btnUpdateLoc.SetOnClick(func() {
 		latStr := editLat.Text()
@@ -1457,7 +1522,7 @@ func createUI() {
 
 	// Search section (moved to right side, where lat/lon used to be)
 	searchEdit = wui.NewEditLine()
-	searchEdit.SetBounds(440, 12, 120, 24)
+	searchEdit.SetBounds(440, 12, 120, 20)
 	searchEdit.SetText("")
 	searchEdit.SetOnTextChange(onSearchEditChange)
 	mainWindow.Add(searchEdit)
@@ -1469,7 +1534,7 @@ func createUI() {
 	mainWindow.Add(searchCombo)
 
 	buttonSearch := wui.NewButton()
-	buttonSearch.SetBounds(565, 12, 50, 24)
+	buttonSearch.SetBounds(565, 12, 50, 22)
 	buttonSearch.SetText("Search")
 	buttonSearch.SetOnClick(func() { onSearchEditChange() })
 	mainWindow.Add(buttonSearch)
@@ -1479,6 +1544,18 @@ func createUI() {
 	btnGeo.SetText("📍")
 	btnGeo.SetOnClick(onGeoClick)
 	mainWindow.Add(btnGeo)
+
+	// Theme selection
+	// themeLabel := wui.NewLabel()
+	// themeLabel.SetBounds(240, 48, 12, 24)
+	// themeLabel.SetText("Theme:")
+	// mainWindow.Add(themeLabel)
+
+	themeCombo = wui.NewComboBox()
+	themeCombo.SetBounds(180, 12, 100, 24)
+	themeCombo.SetOnChange(applyTheme)
+	mainWindow.Add(themeCombo)
+	loadThemes()
 
 	// Current weather section
 	labelMainIcon = wui.NewLabel()
