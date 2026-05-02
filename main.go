@@ -104,6 +104,7 @@ type AppConfig struct {
 		RainbowColors       []RGBColor `json:"rainbow_colors"`
 	} `json:"colors"`
 	Verifications map[string]bool `json:"verifications"`
+	ThemeName     string          `json:"theme_name"`
 }
 
 // ---------------------------------------------------------------------
@@ -543,6 +544,48 @@ func getUserLocationAsync(callback func(float64, float64, string, string, error)
 			return
 		}
 		callback(data.Lat, data.Lon, data.City, data.Country, nil)
+	}()
+}
+
+func reverseGeocodeAsync(lat, lon float64, callback func(string, error)) {
+	go func() {
+		client := &http.Client{}
+		url := fmt.Sprintf("https://nominatim.openstreetmap.org/reverse?format=json&lat=%f&lon=%f", lat, lon)
+		req, _ := http.NewRequest("GET", url, nil)
+		req.Header.Set("User-Agent", "RainbowTool/1.0")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			callback("", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		var data struct {
+			DisplayName string `json:"display_name"`
+			Address     struct {
+				City    string `json:"city"`
+				Town    string `json:"town"`
+				Village string `json:"village"`
+				Country string `json:"country"`
+			} `json:"address"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+			callback("", err)
+			return
+		}
+
+		name := data.Address.City
+		if name == "" {
+			name = data.Address.Town
+		}
+		if name == "" {
+			name = data.Address.Village
+		}
+		if name == "" {
+			name = data.DisplayName
+		}
+		callback(name, nil)
 	}()
 }
 
@@ -1421,7 +1464,7 @@ func createUI() {
 	mainWindow.SetFont(windowFont)
 	
 	mainWindow.SetInnerSize(655, 425)
-	mainWindow.SetPosition(180, 70)
+	mainWindow.SetPosition(200, 70)
 	mainWindow.SetResizable(false)
 	mainWindow.SetHasMaxButton(false)
 	mainWindow.SetTitle("Rainbow Tool")
@@ -1437,12 +1480,19 @@ func createUI() {
 
 		themeCombo.Clear()
 		themeItems = nil
+		selectedIndex := -1
 		for _, f := range files {
 			if !f.IsDir() && strings.HasSuffix(strings.ToLower(f.Name()), ".json") {
 				name := strings.TrimSuffix(f.Name(), filepath.Ext(f.Name()))
 				themeItems = append(themeItems, f.Name())
 				themeCombo.AddItem(name)
+				if name == appConfig.ThemeName {
+					selectedIndex = len(themeItems) - 1
+				}
 			}
+		}
+		if selectedIndex >= 0 {
+			themeCombo.SetSelectedIndex(selectedIndex)
 		}
 	}
 
@@ -1468,6 +1518,7 @@ func createUI() {
 		oldVerifications := appConfig.Verifications
 		appConfig = newConfig
 		appConfig.Verifications = oldVerifications
+		appConfig.ThemeName = strings.TrimSuffix(themeItems[index], filepath.Ext(themeItems[index]))
 
 		saveConfig()
 		if mainCanvas != nil {
@@ -1511,6 +1562,15 @@ func createUI() {
 			currentLon = lon
 			locationName = fmt.Sprintf("%.2f, %.2f", lat, lon)
 			countryName = ""
+			searchEdit.SetText(locationName)
+			
+			reverseGeocodeAsync(lat, lon, func(name string, err error) {
+				if err == nil && name != "" {
+					locationName = name
+					searchEdit.SetText(name)
+				}
+			})
+			
 			selectedDayData = nil
 			selectedHourlyData = nil
 			selectedDate = "today"

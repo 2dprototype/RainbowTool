@@ -1,0 +1,39 @@
+{
+    "colors": {
+        "sky_day_day": [200, 225, 255],
+        "sky_night": [30, 28, 60],
+        "sky_sunset": [255, 185, 200],
+        "ground_green_1": [210, 255, 205],
+        "ground_green_2": [185, 235, 180],
+        "ground_snow_1": [255, 245, 245],
+        "ground_snow_2": [250, 235, 240],
+        "ground_desert_1": [255, 225, 200],
+        "ground_desert_2": [245, 205, 180],
+        "ground_storm_1": [160, 145, 160],
+        "ground_storm_2": [140, 125, 140],
+        "cloud_white": [255, 240, 245],
+        "cloud_light_gray": [245, 215, 225],
+        "cloud_dark_gray": [205, 170, 185],
+        "cloud_storm": [165, 140, 160],
+        "rain_drop": [220, 185, 210],
+        "snow_drop": [255, 235, 240],
+        "lightning": [255, 225, 190],
+        "wind_line": [240, 200, 220],
+        "sun_inner": [255, 235, 185],
+        "sun_outer": [255, 200, 185],
+        "moon": [255, 225, 235],
+        "moon_crater": [240, 205, 220],
+        "star": [255, 235, 205],
+        "canvas_background": [55, 32, 52],
+        "rainbow_colors": [
+            [255, 190, 205],
+            [255, 205, 180],
+            [255, 235, 190],
+            [200, 250, 200],
+            [185, 215, 245],
+            [210, 190, 240],
+            [255, 195, 225]
+        ]
+    },
+    "verifications": {}
+}
