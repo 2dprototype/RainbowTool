@@ -86,14 +86,31 @@ go build -ldflags="-H windowsgui" -o rainbowtool.exe
 go build -o rainbowtool.exe
 ```
 
-## Usage
+### Command Line Usage
+
+Rainbow Tool supports CLI commands for quick weather checks:
+
+```bash
+# Check weather for a specific city
+rainbowtool "New York"
+
+# Open in Quick Mode (mini window)
+rainbowtool quick
+```
+
+### Quick Mode
+Quick Mode opens a compact 340x240 window showing only the vital information:
+- Current Temperature
+- Rainbow Probability %
+- Animated Weather Visualizer
 
 ### Quick Start
 
-1. Launch `rainbowtool.exe`
-2. The app will auto-detect your location via IP
-3. View current weather and rainbow predictions
-4. Use the interface:
+1. Launch `rainbowtool.exe` for the full experience.
+2. Run `rainbowtool quick` for the mini visualizer.
+3. The app will auto-detect your location via IP.
+4. View current weather and rainbow predictions.
+5. Use the interface:
 
 ```
 [🌈 Rainbow Tool]  [Lat: 40.71] [Lon: -74.00] [Go]  [Search...] [🔍] [📍]

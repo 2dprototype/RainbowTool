@@ -643,32 +643,37 @@ func extractHourlyDataForDay(w *WeatherResponse, targetDate time.Time) []HourlyD
 // ---------------------------------------------------------------------
 // UI update functions
 // ---------------------------------------------------------------------
+func setLabelText(l *wui.Label, text string) {
+	if l != nil {
+		l.SetText(text)
+	}
+}
+
 func updateCurrentWeather() {
 	if selectedDayData != nil && selectedDate != "today" {
 		// Show selected day's data (not current)
 		icon, desc := weatherInfo(selectedDayData.WeatherCode)
-		labelMainTemp.SetText(formatTemp(selectedDayData.TemperatureMax))
-		labelMainFeels.SetText(fmt.Sprintf("High / Low: %s / %s", formatTemp(selectedDayData.TemperatureMax), formatTemp(selectedDayData.TemperatureMin)))
-		labelMainIcon.SetText(icon)
-		labelDesc.SetText(desc)
-		labelDate.SetText(selectedDayData.Date.Format("Mon, Jan 2, 2006"))
+		setLabelText(labelMainTemp, formatTemp(selectedDayData.TemperatureMax))
+		setLabelText(labelMainFeels, fmt.Sprintf("High / Low: %s / %s", formatTemp(selectedDayData.TemperatureMax), formatTemp(selectedDayData.TemperatureMin)))
+		setLabelText(labelMainIcon, icon)
+		setLabelText(labelDesc, desc)
+		setLabelText(labelDate, selectedDayData.Date.Format("Mon, Jan 2, 2006"))
 	} else if weatherCache != nil {
 		// Show current weather
 		c := weatherCache.Current
 		icon, desc := weatherInfo(c.WeatherCode)
-		labelMainTemp.SetText(formatTemp(c.Temperature2m))
-		labelMainFeels.SetText(fmt.Sprintf("Feels %s", formatTemp(c.ApparentTemperature)))
-		labelMainIcon.SetText(icon)
-		labelDesc.SetText(desc)
-		labelDate.SetText(time.Now().Format("Mon, Jan 2, 2006"))
-		labelDate.SetText(time.Now().Format("Mon, Jan 2, 2006"))
+		setLabelText(labelMainTemp, formatTemp(c.Temperature2m))
+		setLabelText(labelMainFeels, fmt.Sprintf("Feels %s", formatTemp(c.ApparentTemperature)))
+		setLabelText(labelMainIcon, icon)
+		setLabelText(labelDesc, desc)
+		setLabelText(labelDate, time.Now().Format("Mon, Jan 2, 2006"))
 	}
 	
 	loc := locationName
 	if countryName != "" {
 		loc += ", " + countryName
 	}
-	labelLocation.SetText(loc)
+	setLabelText(labelLocation, loc)
 }
 
 func updateFeatures() {
@@ -685,7 +690,7 @@ func updateFeatures() {
 	}
 	
 	c := weatherCache.Current
-	dailyData := extractDailyData(weatherCache) // Unused, keeping if needed elsewhere
+	dailyData := extractDailyData(weatherCache)
 	
 	lat := weatherCache.Latitude
 	lon := weatherCache.Longitude
@@ -704,9 +709,9 @@ func updateFeatures() {
 	}
 
 	// Rainbow-specific metrics
-	featureLabels["rainbow"].SetText(bestRainbow)
-	featureLabels["rainbowDetail"].SetText(bestRainbowDetail)
-	featureLabels["rainbowBadge"].SetText(bestRainbowBadge)
+	setLabelText(featureLabels["rainbow"], bestRainbow)
+	setLabelText(featureLabels["rainbowDetail"], bestRainbowDetail)
+	setLabelText(featureLabels["rainbowBadge"], bestRainbowBadge)
 
 	sunElevVal := "--"
 	sunElevDetail := "Night"
@@ -720,23 +725,21 @@ func updateFeatures() {
 			sunElevDetail = "Optimal angle"
 		}
 	}
-	featureLabels["sun"].SetText(sunElevVal)
-	featureLabels["sunDetail"].SetText(sunElevDetail)
-	featureLabels["sunBadge"].SetText("Angle")
+	setLabelText(featureLabels["sun"], sunElevVal)
+	setLabelText(featureLabels["sunDetail"], sunElevDetail)
+	setLabelText(featureLabels["sunBadge"], "Angle")
 
 	precipProb := c.Precipitation
 	if precipProb == 0 && len(dailyData) > 0 {
 		precipProb = dailyData[0].PrecipitationMax
 	}
-	featureLabels["precip"].SetText(fmt.Sprintf("%.0f%%", precipProb))
-	featureLabels["precipDetail"].SetText("Required for bows")
-	featureLabels["precipBadge"].SetText("Moisture")
+	setLabelText(featureLabels["precip"], fmt.Sprintf("%.0f%%", precipProb))
+	setLabelText(featureLabels["precipDetail"], "Required for bows")
+	setLabelText(featureLabels["precipBadge"], "Moisture")
 
-	featureLabels["cloud"].SetText(fmt.Sprintf("%.0f%%", c.CloudCover))
-	featureLabels["cloudDetail"].SetText("Need < 95%")
-	featureLabels["cloudBadge"].SetText("Blockage")
-
-	// Remove older cards from updates
+	setLabelText(featureLabels["cloud"], fmt.Sprintf("%.0f%%", c.CloudCover))
+	setLabelText(featureLabels["cloudDetail"], "Need < 95%")
+	setLabelText(featureLabels["cloudBadge"], "Blockage")
 
 	if mainCanvas != nil {
 		mainCanvas.Paint()
@@ -747,7 +750,7 @@ func updateFeatures() {
 }
 
 func updateHourlyTable() {
-	if weatherCache == nil {
+	if weatherCache == nil || hourlyTable == nil {
 		return
 	}
 	
@@ -779,9 +782,12 @@ func updateHourlyTable() {
 		sunAngles[hour.Time.Unix()] = math.Round(sunElev*10) / 10 // Round to 1 decimal
 	}
 
-	hourlyTable.Clear()
+	// Only clear if row count changed to avoid flickering/selection loss
+	if hourlyTable.RowCount() != len(hourlyData) {
+		hourlyTable.Clear()
+	}
 	
-	for _, hour := range hourlyData {
+	for i, hour := range hourlyData {
 		icon, _ := weatherInfo(hour.WeatherCode)
 		temp := formatTemp(hour.Temperature2m)
 		
@@ -809,17 +815,16 @@ func updateHourlyTable() {
 			rainStr += " ✅"
 		}
 
-		row := hourlyTable.RowCount()
-		hourlyTable.SetCell(0, row, hour.Time.Format("03:04 PM"))
-		hourlyTable.SetCell(1, row, icon)
-		hourlyTable.SetCell(2, row, temp)
-		hourlyTable.SetCell(3, row, rainStr)
-		hourlyTable.SetCell(4, row, sunAngleStr)
+		hourlyTable.SetCell(0, i, hour.Time.Format("03:04 PM"))
+		hourlyTable.SetCell(1, i, icon)
+		hourlyTable.SetCell(2, i, temp)
+		hourlyTable.SetCell(3, i, rainStr)
+		hourlyTable.SetCell(4, i, sunAngleStr)
 	}
 }
 
 func updateDailyTable() {
-	if weatherCache == nil {
+	if weatherCache == nil || dailyTable == nil {
 		return
 	}
 	
@@ -1051,7 +1056,9 @@ func onGeoClick() {
 }
 
 func updateData() {
-	labelLocation.SetText("Loading weather data...")
+	if labelLocation != nil {
+		labelLocation.SetText("Loading weather data...")
+	}
 	
 	if editLat != nil {
 		editLat.SetText(fmt.Sprintf("%.4f", currentLat))
@@ -1078,7 +1085,9 @@ func updateData() {
 			
 			logWeatherData(w, currentLat, currentLon, locationName+", "+countryName)
 		} else if err != nil {
-			labelLocation.SetText("Error loading weather data")
+			if labelLocation != nil {
+				labelLocation.SetText("Error loading weather data")
+			}
 			if logger != nil {
 				logger.Printf("Error fetching weather: %v", err)
 			}
@@ -1773,8 +1782,107 @@ func createUI() {
 	mainWindow.Add(colorCanvas)
 }
 
+func runCLI(query string) {
+	searchCityAsync(query, func(items []geocodingItem, err error) {
+		if err != nil || len(items) == 0 {
+			fmt.Printf("Error: Could not find location '%s'\n", query)
+			os.Exit(1)
+		}
+		item := items[0]
+		fmt.Printf("Location: %s, %s (%f, %f)\n", item.Name, item.Country, item.Lat, item.Lon)
+		fetchWeatherAsync(item.Lat, item.Lon, func(w *WeatherResponse, err error) {
+			if err != nil {
+				fmt.Printf("Error: Could not fetch weather: %v\n", err)
+				os.Exit(1)
+			}
+			c := w.Current
+			_, desc := weatherInfo(c.WeatherCode)
+			fmt.Printf("Temperature: %.1f°C (Feels %.1f°C)\n", c.Temperature2m, c.ApparentTemperature)
+			fmt.Printf("Condition: %s\n", desc)
+			fmt.Printf("Humidity: %.0f%%\n", c.RelativeHumidity2m)
+			fmt.Printf("Wind: %.1f km/h\n", c.WindSpeed10m)
+			hourlyData := extractHourlyDataForDay(w, time.Now())
+			tzOff := float64(w.UTC_Offset_Seconds) / 3600
+			preds := predictRainbow(hourlyData, w.Latitude, w.Longitude, tzOff, false)
+			if len(preds) > 0 {
+				best := preds[0]
+				fmt.Printf("Rainbow Probability: %d%% at %s (Sun Angle: %.1f°)\n", best.Score, best.Time.Format("15:04"), best.SunElev)
+			} else {
+				fmt.Println("Rainbow Probability: Low / None")
+			}
+			os.Exit(0)
+		})
+	})
+	select {}
+}
+
+func createQuickUI() {
+	windowFont, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -11})
+	mainWindow = wui.NewWindow()
+	mainWindow.SetFont(windowFont)
+	mainWindow.SetInnerSize(340, 240)
+	mainWindow.SetResizable(false)
+	mainWindow.SetHasMaxButton(false)
+	mainWindow.SetTitle("Rainbow Tool Quick")
+
+	labelMainTemp = wui.NewLabel()
+	labelMainTemp.SetBounds(10, 10, 100, 40)
+	fontTemp, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -24, Bold: true})
+	labelMainTemp.SetFont(fontTemp)
+	labelMainTemp.SetText("--°C")
+	mainWindow.Add(labelMainTemp)
+
+	labelQuickRainbow := wui.NewLabel()
+	labelQuickRainbow.SetBounds(120, 15, 200, 30)
+	fontRainbow, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -18, Bold: true})
+	labelQuickRainbow.SetFont(fontRainbow)
+	labelQuickRainbow.SetText("🌈 --%")
+	featureLabels = make(map[string]*wui.Label)
+	featureLabels["rainbow"] = labelQuickRainbow
+	mainWindow.Add(labelQuickRainbow)
+
+	mainCanvas = wui.NewPaintBox()
+	mainCanvas.SetBounds(10, 55, 320, 175)
+	mainCanvas.SetOnPaint(onMainCanvasPaint)
+	mainWindow.Add(mainCanvas)
+}
+
+func runQuickMode() {
+	createQuickUI()
+	go func() {
+		ticker := time.NewTicker(50 * time.Millisecond)
+		for range ticker.C {
+			animFrame++
+			if mainCanvas != nil {
+				mainCanvas.Paint()
+			}
+		}
+	}()
+	getUserLocationAsync(func(lat, lon float64, city, country string, err error) {
+		if err == nil {
+			currentLat = lat
+			currentLon = lon
+			locationName = city
+			countryName = country
+		}
+		updateData()
+	})
+	mainWindow.Show()
+}
+
 func main() {
 	loadConfig()
+
+	if len(os.Args) > 1 {
+		arg := os.Args[1]
+		if arg == "quick" {
+			runQuickMode()
+			return
+		} else if !strings.HasPrefix(arg, "-") {
+			runCLI(arg)
+			return
+		}
+	}
 
 	if err := setupLogging(); err != nil {
 		fmt.Printf("Warning: Could not setup logging: %v\n", err)
