@@ -1,4 +1,4 @@
-module weather
+module rainbooh
 
 go 1.25.0
 

@@ -1,4 +1,4 @@
-# Weather Pro
+# Rainbow Tool
 
 A Windows desktop weather application built with Go and the wui GUI framework. Get detailed weather forecasts, unique meteorological predictions like rainbow chances, aurora visibility, and stargazing ratings.
 
@@ -23,7 +23,7 @@ A Windows desktop weather application built with Go and the wui GUI framework. G
 
 ## Screenshots
 
-![Weather Pro Screenshot](./preview/screenshot.png)
+![Rainbow Tool Screenshot](./preview/screenshot.png)
 
 ## Installation
 
@@ -32,7 +32,7 @@ A Windows desktop weather application built with Go and the wui GUI framework. G
 - Internet connection for weather data
 
 ### Download
-Download the latest `weather.exe` from the [Releases](https://github.com/2dprototype/WeatherPro/releases) page.
+Download the latest `rainbooh.exe` from the [Releases](https://github.com/2dprototype/WeatherPro/releases) page.
 
 ### Build from Source
 
@@ -45,12 +45,12 @@ cd WeatherPro
 go mod tidy
 
 # Build
-go build -ldflags="-H windowsgui" -o weather.exe main.go
+go build -ldflags="-H windowsgui" -o rainbooh.exe main.go
 ```
 
 ## Usage
 
-1. Launch `weather.exe`
+1. Launch `rainbooh.exe`
 2. The app will automatically detect your location
 3. Search for any city using the search box
 4. Click on any day in the daily forecast to see detailed hourly data
@@ -80,7 +80,7 @@ Each card provides a score (0-100%, 0-10, or 0-5 rating) with detailed breakdown
 
 Weather data is automatically logged to:
 ```
-%EXEDIR%/WeatherPro/YYYY-MM-DD.log
+%EXEDIR%/RainbowTool/YYYY-MM-DD.log
 ```
 
 ## License

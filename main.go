@@ -50,6 +50,7 @@ type Hourly struct {
 	DewPoint2m          []float64 `json:"dew_point_2m"`
 	WeatherCode         []int     `json:"weather_code"`
 	RelativeHumidity2m  []float64 `json:"relative_humidity_2m"`
+	WindSpeed10m        []float64 `json:"wind_speed_10m"`
 }
 
 type Daily struct {
@@ -88,10 +89,6 @@ var (
 	labelMainIcon  *wui.Label
 	labelLocation  *wui.Label
 	labelDesc      *wui.Label
-	labelHumidity  *wui.Label
-	labelWind      *wui.Label
-	labelPressure  *wui.Label
-	labelUV        *wui.Label
 	labelDate      *wui.Label // Added to show selected date
 
 	// feature cards
@@ -100,6 +97,10 @@ var (
 	// hourly & daily tables
 	hourlyTable *wui.StringTable
 	dailyTable  *wui.StringTable
+
+	// canvases
+	mainCanvas  *wui.PaintBox
+	colorCanvas *wui.PaintBox
 
 	// state
 	currentLat          float64 = 40.71
@@ -114,6 +115,7 @@ var (
 	selectedDayData    *DailyDayData
 	selectedHourlyData []HourlyData
 	selectedDate       string
+	selectedHourData   *HourlyData
 	
 	// logging
 	logFile *os.File
@@ -137,12 +139,13 @@ type DailyDayData struct {
 }
 
 type HourlyData struct {
-	Time              time.Time
-	Temperature2m     float64
-	WeatherCode       int
-	PrecipitationProb float64
-	CloudCover        float64
+	Time               time.Time
+	Temperature2m      float64
+	WeatherCode        int
+	PrecipitationProb  float64
+	CloudCover         float64
 	RelativeHumidity2m float64
+	WindSpeed10m       float64
 }
 
 // ---------------------------------------------------------------------
@@ -320,6 +323,9 @@ func predictRainbow(hourlyData []HourlyData, lat, lon float64, tzOffsetHours flo
 		if precipProb < 10 {
 			score *= 0.1 // Not enough moisture
 		}
+		if hourlyData[i].Temperature2m < 0 {
+			score *= 0.0 // Snow instead of rain
+		}
 
 		finalScore := int(math.Min(98, math.Round(score)))
 		if finalScore > 10 {
@@ -336,7 +342,7 @@ func predictRainbow(hourlyData []HourlyData, lat, lon float64, tzOffsetHours flo
 // ---------------------------------------------------------------------
 func fetchWeatherAsync(lat, lon float64, callback func(*WeatherResponse, error)) {
 	go func() {
-		url := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,uv_index,dew_point_2m,surface_pressure&hourly=precipitation_probability,cloud_cover,temperature_2m,dew_point_2m,weather_code,relative_humidity_2m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=auto&forecast_days=7&past_days=7",
+		url := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,uv_index,dew_point_2m,surface_pressure&hourly=precipitation_probability,cloud_cover,temperature_2m,dew_point_2m,weather_code,relative_humidity_2m,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=auto&forecast_days=7&past_days=7",
 			lat, lon)
 		
 		resp, err := http.Get(url)
@@ -448,6 +454,7 @@ func extractHourlyDataForDay(w *WeatherResponse, targetDate time.Time) []HourlyD
 				PrecipitationProb:  w.Hourly.PrecipitationProb[i],
 				CloudCover:         w.Hourly.CloudCover[i],
 				RelativeHumidity2m: w.Hourly.RelativeHumidity2m[i],
+				WindSpeed10m:       w.Hourly.WindSpeed10m[i],
 			})
 		}
 	}
@@ -466,12 +473,6 @@ func updateCurrentWeather() {
 		labelMainIcon.SetText(icon)
 		labelDesc.SetText(desc)
 		labelDate.SetText(selectedDayData.Date.Format("Mon, Jan 2, 2006"))
-		
-		// For selected days, hide some current-specific data
-		labelHumidity.SetText("--")
-		labelWind.SetText("--")
-		labelPressure.SetText("--")
-		labelUV.SetText("--")
 	} else if weatherCache != nil {
 		// Show current weather
 		c := weatherCache.Current
@@ -481,11 +482,7 @@ func updateCurrentWeather() {
 		labelMainIcon.SetText(icon)
 		labelDesc.SetText(desc)
 		labelDate.SetText(time.Now().Format("Mon, Jan 2, 2006"))
-		
-		labelHumidity.SetText(fmt.Sprintf("%.0f%%", c.RelativeHumidity2m))
-		labelWind.SetText(fmt.Sprintf("%.0f km/h", c.WindSpeed10m))
-		labelPressure.SetText(fmt.Sprintf("%.0f hPa", c.SurfacePressure))
-		labelUV.SetText(fmt.Sprintf("%.1f", c.UVIndex))
+		labelDate.SetText(time.Now().Format("Mon, Jan 2, 2006"))
 	}
 	
 	loc := locationName
@@ -527,191 +524,47 @@ func updateFeatures() {
 		bestRainbowBadge = "View window"
 	}
 
-	// Moon Phase Calculation
-	moonPhase := (float64(time.Now().UnixMilli()-time.Date(2000, 1, 6, 18, 14, 0, 0, time.UTC).UnixMilli()) / (1000 * 3600 * 24)) / 29.53
-	moonIllum := 0.5 * (1 - math.Cos(2*math.Pi*moonPhase))
+	// Rainbow-specific metrics
+	featureLabels["rainbow"].SetText(bestRainbow)
+	featureLabels["rainbowDetail"].SetText(bestRainbowDetail)
+	featureLabels["rainbowBadge"].SetText(bestRainbowBadge)
 
-	// Aurora Score
-	latScore := func() int {
-		absLat := math.Abs(lat)
-		if absLat > 55 { return 7 }
-		if absLat > 48 { return 4 }
-		return 1
-	}()
-
-	cloudScore := 1
-	if c.CloudCover < 40 {
-		cloudScore = 3
+	sunElevVal := "--"
+	sunElevDetail := "Night"
+	if len(rainbowPreds) > 0 {
+		sunElevVal = fmt.Sprintf("%.1f°", rainbowPreds[0].SunElev)
+		if rainbowPreds[0].SunElev > 42 {
+			sunElevDetail = "Too high (>42°)"
+		} else if rainbowPreds[0].SunElev <= 0 {
+			sunElevDetail = "Below horizon"
+		} else {
+			sunElevDetail = "Optimal angle"
+		}
 	}
-
-	moonScore := 0
-	if moonIllum > 0.6 {
-		moonScore = 1
-	}
-	auroraScore := int(math.Min(10, math.Round(float64(latScore+cloudScore-moonScore))))
-
-	// Stars Rating (Fixed missing parenthesis)
-	starsRating := int(math.Min(5, math.Round(float64(
-		int((100-c.CloudCover)/20) +
-			func() int { if c.RelativeHumidity2m < 50 { return 1 }; return 0 }() +
-			func() int { if moonIllum < 0.3 { return 1 }; return 0 }(), // Added missing paren here
-	))))
-
-	// Golden Hour Score
-	goldenScore := int(math.Min(100, math.Round(float64(
-		func() int {
-			if c.CloudCover > 10 && c.CloudCover < 60 { return 50 }
-			return 20
-		}() +
-		func() int {
-			if c.RelativeHumidity2m < 55 { return 25 }
-			return 15
-		}() +
-		func() int {
-			if c.UVIndex > 0 { return 15 }
-			return 0
-		}(),
-	))))
-
-	// Fog Probability
-	fogProb := int(math.Min(98, math.Round(float64(
-		func() int {
-			diff := c.Temperature2m - c.DewPoint2m
-			if diff < 2 { return 45 }
-			if diff < 4 { return 25 }
-			return 5
-		}() +
-		func() int {
-			if c.RelativeHumidity2m > 80 { return 35 }
-			return 15
-		}() +
-		func() int {
-			if c.WindSpeed10m < 8 { return 20 }
-			return 5
-		}(),
-	))))
-
-	// Mirage Score
-	mirageScore := 10
-	if c.Temperature2m > 30 && c.CloudCover < 30 {
-		mirageScore = int(math.Min(95, 60+(c.Temperature2m-30)*3))
-	} else if c.Temperature2m < 5 {
-		mirageScore = int(math.Min(50, 20+math.Abs(c.Temperature2m)*3))
-	}
-
-	// Comfort Rating
-	heatIndexC := c.Temperature2m + 0.5555*(6.11*math.Exp(5417.753*(1/273.16-1/(c.DewPoint2m+273.15)))-10)
-	comfortRating := "Comfortable"
-	switch {
-	case heatIndexC < 10:
-		comfortRating = "Cool"
-	case heatIndexC < 22:
-		comfortRating = "Comfortable"
-	case heatIndexC < 28:
-		comfortRating = "Warm"
-	case heatIndexC < 35:
-		comfortRating = "Hot"
-	default:
-		comfortRating = "Dangerous"
-	}
-
-	// Lightning Risk
-	lightningRisk := 0
-	if c.WeatherCode >= 95 && c.CloudCover > 60 {
-		lightningRisk = int(math.Min(90, (c.RelativeHumidity2m-50)*1.5+c.WindSpeed10m*0.5))
-	}
-
-	// Pollen Index
-	pollenIndex := int(math.Round(func() float64 {
-		base := 10.0
-		if c.Temperature2m > 15 { base += 30 }
-		if c.RelativeHumidity2m < 60 { base += 20 }
-		if c.WindSpeed10m < 15 { base += 15 }
-		return base
-	}()))
+	featureLabels["sun"].SetText(sunElevVal)
+	featureLabels["sunDetail"].SetText(sunElevDetail)
+	featureLabels["sunBadge"].SetText("Angle")
 
 	precipProb := c.Precipitation
 	if precipProb == 0 && len(dailyData) > 0 {
 		precipProb = dailyData[0].PrecipitationMax
 	}
-
-	featureLabels["rainbow"].SetText(bestRainbow)
-	featureLabels["rainbowDetail"].SetText(bestRainbowDetail)
-	featureLabels["rainbowBadge"].SetText(bestRainbowBadge)
-
-	featureLabels["aurora"].SetText(fmt.Sprintf("%d/10", auroraScore))
-	featureLabels["auroraDetail"].SetText(fmt.Sprintf("Lat %.1f° · cloud %.0f%%", math.Abs(lat), c.CloudCover))
-	featureLabels["auroraBadge"].SetText(func() string {
-		if auroraScore > 6 {
-			return "Good chance"
-		}
-		return "Low"
-	}())
-
-	featureLabels["stars"].SetText(fmt.Sprintf("%d/5", starsRating))
-	featureLabels["starsDetail"].SetText(fmt.Sprintf("Cloud %.0f%% · moon %.0f%%", c.CloudCover, moonIllum*100))
-	featureLabels["starsBadge"].SetText(func() string {
-		if starsRating > 3 {
-			return "Great"
-		}
-		return "Poor"
-	}())
-
-	featureLabels["golden"].SetText(fmt.Sprintf("%d%%", goldenScore))
-	featureLabels["goldenDetail"].SetText("Cloud pattern optimal")
-	featureLabels["goldenBadge"].SetText("Photo score")
-
-	featureLabels["fog"].SetText(fmt.Sprintf("%d%%", fogProb))
-	featureLabels["fogDetail"].SetText(fmt.Sprintf("Spread %.1f°C", c.Temperature2m-c.DewPoint2m))
-	featureLabels["fogBadge"].SetText("Dew point")
-
-	featureLabels["mirage"].SetText(fmt.Sprintf("%d%%", mirageScore))
-	featureLabels["mirageDetail"].SetText(func() string {
-		if c.Temperature2m > 30 {
-			return "Hot surface"
-		}
-		if c.Temperature2m < 5 {
-			return "Cold inversion"
-		}
-		return "Low gradient"
-	}())
-	featureLabels["mirageBadge"].SetText(func() string {
-		if mirageScore > 40 {
-			return "Visible"
-		}
-		return ""
-	}())
-
-	featureLabels["lightning"].SetText(func() string {
-		if lightningRisk > 0 {
-			return fmt.Sprintf("%d%%", lightningRisk)
-		}
-		return "None"
-	}())
-	featureLabels["lightningDetail"].SetText(func() string {
-		if lightningRisk > 30 {
-			return "Seek shelter"
-		}
-		return "Safe"
-	}())
-	featureLabels["lightningBadge"].SetText(func() string {
-		if lightningRisk > 40 {
-			return "Alert"
-		}
-		return ""
-	}())
-
-	featureLabels["heat"].SetText(fmt.Sprintf("%.0f°C", heatIndexC))
-	featureLabels["heatDetail"].SetText(fmt.Sprintf("Feels %s", comfortRating))
-	featureLabels["heatBadge"].SetText(comfortRating)
-
-	featureLabels["pollen"].SetText(fmt.Sprintf("%d%%", pollenIndex))
-	featureLabels["pollenDetail"].SetText("Temp & wind based")
-	featureLabels["pollenBadge"].SetText("Allergy")
-
 	featureLabels["precip"].SetText(fmt.Sprintf("%.0f%%", precipProb))
-	featureLabels["precipDetail"].SetText("Next hour")
-	featureLabels["precipBadge"].SetText("Rain")
+	featureLabels["precipDetail"].SetText("Required for bows")
+	featureLabels["precipBadge"].SetText("Moisture")
+
+	featureLabels["cloud"].SetText(fmt.Sprintf("%.0f%%", c.CloudCover))
+	featureLabels["cloudDetail"].SetText("Need < 95%")
+	featureLabels["cloudBadge"].SetText("Blockage")
+
+	// Remove older cards from updates
+
+	if mainCanvas != nil {
+		mainCanvas.Paint()
+	}
+	if colorCanvas != nil {
+		colorCanvas.Paint()
+	}
 }
 
 func updateHourlyTable() {
@@ -864,10 +717,36 @@ func onDailyTableSelection() {
 		selectedHourlyData = extractHourlyDataForDay(weatherCache, selectedDay.Date)
 	}
 	
+	selectedHourData = nil
+	
 	// Update all displays
 	updateCurrentWeather()
 	updateFeatures()
 	updateHourlyTable()
+}
+
+func onHourlyTableSelection() {
+	selectedRow := hourlyTable.SelectedRow()
+	if selectedRow < 0 || weatherCache == nil {
+		return
+	}
+	
+	var hourlyData []HourlyData
+	if selectedHourlyData != nil && len(selectedHourlyData) > 0 {
+		hourlyData = selectedHourlyData
+	} else {
+		hourlyData = extractHourlyDataForDay(weatherCache, time.Now())
+	}
+	
+	if selectedRow >= len(hourlyData) {
+		return
+	}
+	
+	selectedHourData = &hourlyData[selectedRow]
+	
+	if mainCanvas != nil {
+		mainCanvas.Paint()
+	}
 }
 
 func updateSearchCombo() {
@@ -935,6 +814,7 @@ func onSearchComboChange(index int) {
 	selectedDayData = nil
 	selectedHourlyData = nil
 	selectedDate = "today"
+	selectedHourData = nil
 	
 	updateData()
 }
@@ -956,6 +836,7 @@ func onGeoClick() {
 		selectedDayData = nil
 		selectedHourlyData = nil
 		selectedDate = "today"
+		selectedHourData = nil
 		
 		updateData()
 		
@@ -971,6 +852,7 @@ func updateData() {
 	selectedDayData = nil
 	selectedHourlyData = nil
 	selectedDate = "today"
+	selectedHourData = nil
 	
 	fetchWeatherAsync(currentLat, currentLon, func(w *WeatherResponse, err error) {
 		if err == nil && w != nil {
@@ -1029,21 +911,229 @@ SCALE:
 		wui.MessageBox("Rainbow Formula Calculation", text)	
 }
 
+func onColorCanvasPaint(c *wui.Canvas) {
+	colors := []wui.Color{
+		wui.RGB(255, 0, 0),    // Red
+		wui.RGB(255, 127, 0),  // Orange
+		wui.RGB(255, 255, 0),  // Yellow
+		wui.RGB(0, 255, 0),    // Green
+		wui.RGB(0, 0, 255),    // Blue
+		wui.RGB(75, 0, 130),   // Indigo
+		wui.RGB(148, 0, 211),  // Violet
+	}
+	
+	w, h := c.Size()
+	rectWidth := w / len(colors)
+	
+	for i, col := range colors {
+		x := i * rectWidth
+		c.FillRect(x, 0, rectWidth, h, col)
+	}
+}
+
+func onMainCanvasPaint(c *wui.Canvas) {
+	w, h := c.Size()
+	
+	if weatherCache == nil {
+		c.FillRect(0, 0, w, h, wui.RGB(200, 200, 200))
+		c.TextOut(10, 10, "Loading...", wui.RGB(0,0,0))
+		return
+	}
+	
+	lat := weatherCache.Latitude
+	lon := weatherCache.Longitude
+	tzOff := float64(weatherCache.UTC_Offset_Seconds) / 3600
+	
+	var targetHour HourlyData
+	if selectedHourData != nil {
+		targetHour = *selectedHourData
+	} else {
+		var hourlyData []HourlyData
+		if selectedHourlyData != nil && len(selectedHourlyData) > 0 {
+			hourlyData = selectedHourlyData
+		} else {
+			hourlyData = extractHourlyDataForDay(weatherCache, time.Now())
+		}
+		
+		rainbowPreds := predictRainbow(hourlyData, lat, lon, tzOff, true)
+		bestTime := time.Now()
+		if len(rainbowPreds) > 0 {
+			bestTime = rainbowPreds[0].Time
+		}
+		
+		found := false
+		for _, hd := range hourlyData {
+			if hd.Time.Equal(bestTime) {
+				targetHour = hd
+				found = true
+				break
+			}
+		}
+		if !found && len(hourlyData) > 0 {
+			targetHour = hourlyData[0]
+		}
+	}
+	
+	cloudCover := targetHour.CloudCover
+	precip := targetHour.PrecipitationProb
+	temp := targetHour.Temperature2m
+	humidity := targetHour.RelativeHumidity2m
+	wind := targetHour.WindSpeed10m
+	code := targetHour.WeatherCode
+	
+	sunElev := getSolarElevationUTC(lat, lon, targetHour.Time.Add(-time.Duration(tzOff) * time.Hour))
+	
+	rainbowScore := 0
+	hourlyDataArr := []HourlyData{targetHour}
+	preds := predictRainbow(hourlyDataArr, lat, lon, tzOff, true)
+	if len(preds) > 0 {
+		rainbowScore = preds[0].Score
+	}
+	
+	groundColor1 := wui.RGB(34, 139, 34) // Default Green
+	groundColor2 := wui.RGB(46, 139, 87)
+	
+	if temp < 0 || (code >= 71 && code <= 86) {
+		groundColor1 = wui.RGB(240, 248, 255) // Alice Blue
+		groundColor2 = wui.RGB(255, 250, 250) // Snow
+	} else if temp > 30 && humidity < 30 {
+		groundColor1 = wui.RGB(237, 201, 175) // Desert Sand
+		groundColor2 = wui.RGB(210, 180, 140) // Tan
+	} else if precip > 80 || code >= 95 {
+		groundColor1 = wui.RGB(25, 100, 25) 
+		groundColor2 = wui.RGB(35, 100, 50)
+	}
+
+	skyBaseR, skyBaseG, skyBaseB := uint8(135), uint8(206), uint8(235) // Light sky blue
+	if sunElev < -5 {
+		skyBaseR, skyBaseG, skyBaseB = 5, 5, 20 // Night
+	} else if sunElev < 10 {
+		skyBaseR, skyBaseG, skyBaseB = 255, 140, 0 // Sunset/Sunrise orange
+	}
+	
+	cloudDarken := uint8(cloudCover * 0.8) // max darken
+	skyR := uint8(math.Max(0, float64(skyBaseR)-float64(cloudDarken)))
+	skyG := uint8(math.Max(0, float64(skyBaseG)-float64(cloudDarken)))
+	skyB := uint8(math.Max(0, float64(skyBaseB)-float64(cloudDarken)))
+	
+	c.FillRect(0, 0, w, h, wui.RGB(skyR, skyG, skyB))
+	
+	if sunElev < -5 && cloudCover < 50 {
+		c.FillRect(20, 20, 2, 2, wui.RGB(255,255,255))
+		c.FillRect(120, 30, 2, 2, wui.RGB(255,255,255))
+		c.FillRect(200, 15, 2, 2, wui.RGB(255,255,255))
+		c.FillRect(350, 40, 2, 2, wui.RGB(255,255,255))
+	}
+	
+	sunX := 80
+	sunY := h - 40 - int(sunElev*2) // Map elevation
+	if sunY > h { sunY = h }
+	if sunY < 20 { sunY = 20 }
+	
+	if sunElev >= -5 {
+		c.FillEllipse(sunX-5, sunY-5, 50, 50, wui.RGB(255, 255, 150))
+		c.FillEllipse(sunX, sunY, 40, 40, wui.RGB(255, 255, 0))
+	} else {
+		c.FillEllipse(sunX, 20, 30, 30, wui.RGB(200, 200, 220))
+		c.FillEllipse(sunX+5, 25, 8, 8, wui.RGB(170, 170, 190))
+		c.FillEllipse(sunX+15, 35, 10, 10, wui.RGB(170, 170, 190))
+	}
+
+	if cloudCover > 10 {
+		cloudColor := wui.RGB(255, 255, 255)
+		if cloudCover > 50 { cloudColor = wui.RGB(200, 200, 200) }
+		if cloudCover > 80 { cloudColor = wui.RGB(100, 100, 100) }
+		if code >= 95 { cloudColor = wui.RGB(50, 50, 60) }
+		
+		numClouds := int(cloudCover / 10)
+		for i := 0; i < numClouds; i++ {
+			cx := (i * 45) % w
+			cy := 10 + (i*10)%40
+			c.FillEllipse(cx, cy, 60, 30, cloudColor)
+			c.FillEllipse(cx+20, cy-10, 50, 40, cloudColor)
+		}
+	}
+
+	c.FillEllipse(-50, h-40, w/2+100, 100, groundColor1)
+	c.FillEllipse(w/2-50, h-60, w/2+100, 150, groundColor2)
+
+	isSnow := (code >= 71 && code <= 75) || (code >= 85 && code <= 86)
+	isStorm := code >= 95
+
+	windOffset := int(wind / 5)
+	
+	if precip > 0 {
+		dropColor := wui.RGB(150, 150, 200)
+		if isSnow {
+			dropColor = wui.RGB(255, 255, 255)
+		}
+		
+		numDrops := int(precip)
+		if numDrops > 80 { numDrops = 80 }
+		
+		for i := 0; i < numDrops; i++ {
+			x := (i * 37) % w
+			y := (i * 23) % (h - 30)
+			
+			if isSnow {
+				c.FillRect(x, y, 3, 3, dropColor)
+			} else {
+				c.Line(x, y, x-windOffset, y+15, dropColor)
+			}
+		}
+	}
+	
+	if isStorm {
+		c.Line(w/2, 20, w/2-10, 50, wui.RGB(255, 255, 0))
+		c.Line(w/2-10, 50, w/2+5, 60, wui.RGB(255, 255, 0))
+		c.Line(w/2+5, 60, w/2-20, h-40, wui.RGB(255, 255, 0))
+	}
+	
+	if wind > 20 {
+		windColor := wui.RGB(200, 200, 200)
+		c.Line(10, h-50, 40, h-50, windColor)
+		c.Line(w/2, h-80, w/2+50, h-80, windColor)
+	}
+
+	if rainbowScore > 10 && sunElev > 0 {
+		colors := []wui.Color{
+			wui.RGB(255, 0, 0), wui.RGB(255, 127, 0), wui.RGB(255, 255, 0),
+			wui.RGB(0, 255, 0), wui.RGB(0, 0, 255), wui.RGB(75, 0, 130), wui.RGB(148, 0, 211),
+		}
+		
+		cx := w / 2 + 50
+		cy := h - 20
+		radius := 110 + int(sunElev)
+		if radius > w/2 { radius = w/2 }
+		
+		for i, col := range colors {
+			r := radius - (i * 5)
+			c.Arc(cx-r, cy-r, r*2, r*2, 270, 180, col)
+			c.Arc(cx-r+1, cy-r+1, r*2-2, r*2-2, 270, 180, col)
+			c.Arc(cx-r+2, cy-r+2, r*2-4, r*2-4, 270, 180, col)
+			c.Arc(cx-r+3, cy-r+3, r*2-6, r*2-6, 270, 180, col)
+		}
+	}
+	
+	info := fmt.Sprintf("%s | Temp: %.1f° | Wind: %.1f | Rain: %.0f%% | Bow: %d%%", targetHour.Time.Format("Mon 15:04"), temp, wind, precip, rainbowScore)
+	c.TextOut(5, 5, info, wui.RGB(255,255,255))
+}
+
 func createUI() {
 	windowFont, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -11})
 	mainWindow = wui.NewWindow()
 	mainWindow.SetFont(windowFont)
 	
-	mainWindow.SetInnerSize(650, 425)
-	mainWindow.SetPosition(200, 70)
+	mainWindow.SetInnerSize(655, 425)
+	mainWindow.SetPosition(180, 70)
 	mainWindow.SetResizable(false)
 	mainWindow.SetHasMaxButton(false)
-	mainWindow.SetTitle("Weather Pro")
+	mainWindow.SetTitle("Rainbow Tool")
 
 	// Header row
 	logo := wui.NewLabel()
-	logo.SetBounds(10, 10, 120, 24)
-	logo.SetText("🌤️ Weather Pro")
+	logo.SetBounds(10, 10, 150, 24)
+	logo.SetText("🌈 Rainbow Tool")
 	logoFont, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -14, Bold: true})
 	logo.SetFont(logoFont)
 	mainWindow.Add(logo)
@@ -1106,50 +1196,14 @@ func createUI() {
 	mainWindow.Add(labelLocation)
 
 	labelDate = wui.NewLabel()
-	labelDate.SetBounds(150, 65, 200, 16)
+	labelDate.SetBounds(150, 65, 100, 16)
 	labelDate.SetText("")
 	mainWindow.Add(labelDate)
 
 	labelDesc = wui.NewLabel()
-	labelDesc.SetBounds(150, 85, 200, 16)
+	labelDesc.SetBounds(150, 85, 100, 16)
 	labelDesc.SetText("--")
 	mainWindow.Add(labelDesc)
-
-	// Meta items (Moved to the top right to save vertical space)
-	metaItems := []struct{ cap, id string }{
-		{"💧 Hum", "hum"},
-		{"💨 Wind", "wind"},
-		{"🔽 Pres", "pres"},
-		{"☀️ UV", "uv"},
-	}
-	
-	for i, m := range metaItems {
-		col := i % 2
-		row := i / 2
-		cx := 405 + col*110 // Moved X coordinate to the right side
-		cy := 60 + row*25   // Tucked under the search bar
-
-		l := wui.NewLabel()
-		l.SetBounds(cx, cy, 50, 18)
-		l.SetText(m.cap)
-		mainWindow.Add(l)
-
-		val := wui.NewLabel()
-		val.SetBounds(cx+50, cy, 60, 18)
-		val.SetText("--")
-		mainWindow.Add(val)
-
-		switch m.id {
-		case "hum":
-			labelHumidity = val
-		case "wind":
-			labelWind = val
-		case "pres":
-			labelPressure = val
-		case "uv":
-			labelUV = val
-		}
-	}
 
 	// Feature cards
 	featureLabels = make(map[string]*wui.Label)
@@ -1157,16 +1211,10 @@ func createUI() {
 		name, icon, title string
 		x, y0             int
 	}{
-		{"rainbow", "🌈", "Rainbow", 10, 120}, // Adjusted Y start
-		{"aurora", "🌌", "Aurora", 135, 120},
-		{"stars", "⭐", "Stargazing", 260, 120},
-		{"golden", "🌅", "Golden hr", 385, 120},
-		{"fog", "🌫️", "Fog risk", 510, 120},
-		{"mirage", "💧", "Mirage", 10, 185}, // Adjusted Y start
-		{"lightning", "⚡", "Lightning", 135, 185},
-		{"heat", "🌡️", "Heat idx", 260, 185},
-		{"pollen", "🌻", "Pollen", 385, 185},
-		{"precip", "☂️", "Precip", 510, 185},
+		{"rainbow", "🌈", "Rainbow Prob", 10, 120},
+		{"sun", "☀️", "Sun Elevation", 135, 120},
+		{"precip", "☂️", "Rain Prob", 10, 185},
+		{"cloud", "☁️", "Cloud Cover", 135, 185},
 	}
 	
 	for _, def := range cardDefs {
@@ -1224,12 +1272,13 @@ func createUI() {
 
 	hourlyTable = wui.NewStringTable("🕒 Hour", "Icon", "Temp", "Rainbow", "Sun Angle")
 	hourlyTable.SetBounds(10, 275, 310, 135)
+	hourlyTable.SetOnSelectionChange(onHourlyTableSelection)
 	mainWindow.Add(hourlyTable)
 
 	// Daily table
 	labelDaily := wui.NewLabel()
-	labelDaily.SetBounds(330, 255, 150, 16)
-	labelDaily.SetText("📅 14-day weather")
+	labelDaily.SetBounds(330, 255, 180, 16)
+	labelDaily.SetText("📅 14-day rainbow forecast")
 	labelDaily.SetFont(fontTable)
 	mainWindow.Add(labelDaily)
 
@@ -1238,6 +1287,24 @@ func createUI() {
 	dailyTable.SetBounds(330, 275, 315, 135)
 	dailyTable.SetOnSelectionChange(onDailyTableSelection)
 	mainWindow.Add(dailyTable)
+
+
+	// labelCanvas := wui.NewLabel()
+	// labelCanvas.SetBounds(360, 60, 200, 16)
+	// labelCanvas.SetText("🎨 Rainbow Visualization")
+	// labelCanvas.SetFont(fontTable)
+	// mainWindow.Add(labelCanvas)
+
+	mainCanvas = wui.NewPaintBox()
+	// mainCanvas.SetBounds(260, 80, 385, 170)
+	mainCanvas.SetBounds(330, 80, 315, 170)
+	mainCanvas.SetOnPaint(onMainCanvasPaint)
+	mainWindow.Add(mainCanvas)
+
+	colorCanvas = wui.NewPaintBox()
+	colorCanvas.SetBounds(526, 60, 119, 15)
+	colorCanvas.SetOnPaint(onColorCanvasPaint)
+	mainWindow.Add(colorCanvas)
 }
 
 func main() {
