@@ -160,6 +160,9 @@ var (
 	appConfig  AppConfig
 	configPath string
 
+	// animation
+	animFrame int64
+
 	// new ui elements
 	editLat       *wui.EditLine
 	editLon       *wui.EditLine
@@ -1133,13 +1136,23 @@ func onMainCanvasPaint(c *wui.Canvas) {
 	}
 	
 	cloudCover := targetHour.CloudCover
-	precip := targetHour.PrecipitationProb
+	precipProb := targetHour.PrecipitationProb
 	temp := targetHour.Temperature2m
 	humidity := targetHour.RelativeHumidity2m
 	wind := targetHour.WindSpeed10m
 	code := targetHour.WeatherCode
 	
 	sunElev := getSolarElevationUTC(lat, lon, targetHour.Time.Add(-time.Duration(tzOff) * time.Hour))
+	
+	// --- NEW REALISTIC WEATHER CLASSIFICATION ---
+	isFog := code == 45 || code == 48
+	isDrizzle := (code >= 51 && code <= 57)
+	isRain := (code >= 61 && code <= 67) || (code >= 80 && code <= 82)
+	isSnow := (code >= 71 && code <= 77) || (code >= 85 && code <= 86)
+	isHail := code == 96 || code == 99
+	isThunderstorm := code >= 95
+	isPrecipitating := isDrizzle || isRain || isSnow || isHail
+	isBlizzard := isSnow && wind > 30 // Heavy wind + Snow
 	
 	rainbowScore := 0
 	hourlyDataArr := []HourlyData{targetHour}
@@ -1148,20 +1161,22 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		rainbowScore = preds[0].Score
 	}
 	
+	// --- GROUND COLORS ---
 	groundColor1 := wuiColor(appConfig.Colors.GroundGreen1)
 	groundColor2 := wuiColor(appConfig.Colors.GroundGreen2)
 	
-	if temp < 0 || (code >= 71 && code <= 86) {
+	if temp < 0 || isSnow {
 		groundColor1 = wuiColor(appConfig.Colors.GroundSnow1)
 		groundColor2 = wuiColor(appConfig.Colors.GroundSnow2)
 	} else if temp > 30 && humidity < 30 {
 		groundColor1 = wuiColor(appConfig.Colors.GroundDesert1)
 		groundColor2 = wuiColor(appConfig.Colors.GroundDesert2)
-	} else if precip > 80 || code >= 95 {
+	} else if isRain || isThunderstorm {
 		groundColor1 = wuiColor(appConfig.Colors.GroundStorm1)
 		groundColor2 = wuiColor(appConfig.Colors.GroundStorm2)
 	}
 
+	// --- SKY COLORS ---
 	skyColor := appConfig.Colors.SkyDayDay
 	if sunElev < -5 {
 		skyColor = appConfig.Colors.SkyNight
@@ -1169,14 +1184,34 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		skyColor = appConfig.Colors.SkySunset
 	}
 	
-	cloudDarken := uint8(cloudCover * 0.8) // max darken
-	skyR := uint8(math.Max(0, float64(skyColor[0])-float64(cloudDarken)))
-	skyG := uint8(math.Max(0, float64(skyColor[1])-float64(cloudDarken)))
-	skyB := uint8(math.Max(0, float64(skyColor[2])-float64(cloudDarken)))
+	cloudDarken := float64(cloudCover * 0.8) // Max darken scaling
+	if isThunderstorm || isBlizzard {
+		cloudDarken = 100 // Heavily darken sky for severe weather
+	}
 	
-	c.FillRect(0, 0, w, h, wui.RGB(skyR, skyG, skyB))
+	skyR := math.Max(0, float64(skyColor[0])-cloudDarken)
+	skyG := math.Max(0, float64(skyColor[1])-cloudDarken)
+	skyB := math.Max(0, float64(skyColor[2])-cloudDarken)
 	
-	if sunElev < -5 && cloudCover < 50 {
+	if isThunderstorm && (animFrame%30 == 0 || animFrame%30 == 1) {
+		skyR, skyG, skyB = 255, 255, 255 // Lightning flash triggers sky flash
+	}
+
+	horizonR := math.Min(255, skyR+50)
+	horizonG := math.Min(255, skyG+50)
+	horizonB := math.Min(255, skyB+50)
+
+	// Draw Vertical Gradient Sky
+	for y := 0; y < h; y += 4 {
+		ratio := float64(y) / float64(h)
+		r := uint8(skyR*(1-ratio) + horizonR*ratio)
+		g := uint8(skyG*(1-ratio) + horizonG*ratio)
+		b := uint8(skyB*(1-ratio) + horizonB*ratio)
+		c.FillRect(0, y, w, 4, wui.RGB(r, g, b))
+	}
+	
+	// --- STARS ---
+	if sunElev < -5 && cloudCover < 50 && !isFog {
 		starColor := wuiColor(appConfig.Colors.Star)
 		c.FillRect(20, 20, 2, 2, starColor)
 		c.FillRect(120, 30, 2, 2, starColor)
@@ -1184,77 +1219,48 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		c.FillRect(350, 40, 2, 2, starColor)
 	}
 	
-	sunX := 80
-	sunY := h - 40 - int(sunElev*2) // Map elevation
-	if sunY > h { sunY = h }
-	if sunY < 20 { sunY = 20 }
-	
-	if sunElev >= -5 {
-		c.FillEllipse(sunX-5, sunY-5, 50, 50, wuiColor(appConfig.Colors.SunOuter))
-		c.FillEllipse(sunX, sunY, 40, 40, wuiColor(appConfig.Colors.SunInner))
-	} else {
-		c.FillEllipse(sunX, 20, 30, 30, wuiColor(appConfig.Colors.Moon))
-		c.FillEllipse(sunX+5, 25, 8, 8, wuiColor(appConfig.Colors.MoonCrater))
-		c.FillEllipse(sunX+15, 35, 10, 10, wuiColor(appConfig.Colors.MoonCrater))
+	// --- SUN / MOON ---
+	if !isBlizzard { // Blizzards fully obscure celestial bodies
+		sunX := 40
+		sunY := h - 40 - int(sunElev*2) // Map elevation
+		if sunY > h { sunY = h }
+		if sunY < 20 { sunY = 20 }
+		
+		if sunElev >= -5 {
+			pulse := int(math.Sin(float64(animFrame)*0.2) * 5)
+			c.FillEllipse(sunX-5-pulse, sunY-5-pulse, 50+pulse*2, 50+pulse*2, wuiColor(appConfig.Colors.SunOuter))
+			c.FillEllipse(sunX, sunY, 40, 40, wuiColor(appConfig.Colors.SunInner))
+		} else {
+			c.FillEllipse(sunX, 20, 30, 30, wuiColor(appConfig.Colors.Moon))
+			c.FillEllipse(sunX+5, 25, 8, 8, wuiColor(appConfig.Colors.MoonCrater))
+			c.FillEllipse(sunX+15, 35, 10, 10, wuiColor(appConfig.Colors.MoonCrater))
+		}
 	}
 
+	// --- CLOUDS ---
 	if cloudCover > 10 {
 		cloudColor := wuiColor(appConfig.Colors.CloudWhite)
 		if cloudCover > 50 { cloudColor = wuiColor(appConfig.Colors.CloudLightGray) }
 		if cloudCover > 80 { cloudColor = wuiColor(appConfig.Colors.CloudDarkGray) }
-		if code >= 95 { cloudColor = wuiColor(appConfig.Colors.CloudStorm) }
+		if isThunderstorm || isBlizzard { cloudColor = wuiColor(appConfig.Colors.CloudStorm) }
 		
 		numClouds := int(cloudCover / 10)
+		if isBlizzard { numClouds = 10 } // Force heavy cloud cover for blizzard
+		
 		for i := 0; i < numClouds; i++ {
-			cx := (i * 45) % w
+			speed := float64(i%3+1) * 0.5
+			if wind > 20 { speed *= 2 } // Clouds move faster in wind
+			offset := int(float64(animFrame) * speed)
+			cx := (i * 45 + offset) % (w + 100) - 50
 			cy := 10 + (i*10)%40
-			c.FillEllipse(cx, cy, 60, 30, cloudColor)
-			c.FillEllipse(cx+20, cy-10, 50, 40, cloudColor)
-		}
-	}
-
-	c.FillEllipse(-50, h-40, w/2+100, 100, groundColor1)
-	c.FillEllipse(w/2-50, h-60, w/2+100, 150, groundColor2)
-
-	isSnow := (code >= 71 && code <= 75) || (code >= 85 && code <= 86)
-	isStorm := code >= 95
-
-	windOffset := int(wind / 5)
-	
-	if precip > 0 {
-		dropColor := wuiColor(appConfig.Colors.RainDrop)
-		if isSnow {
-			dropColor = wuiColor(appConfig.Colors.SnowDrop)
-		}
-		
-		numDrops := int(precip)
-		if numDrops > 80 { numDrops = 80 }
-		
-		for i := 0; i < numDrops; i++ {
-			x := (i * 37) % w
-			y := (i * 23) % (h - 30)
 			
-			if isSnow {
-				c.FillRect(x, y, 3, 3, dropColor)
-			} else {
-				c.Line(x, y, x-windOffset, y+15, dropColor)
-			}
+			c.FillEllipse(cx, cy, 70, 35, cloudColor)
+			c.FillEllipse(cx+15, cy-15, 60, 45, cloudColor)
+			c.FillEllipse(cx-10, cy-5, 50, 40, cloudColor)
 		}
 	}
 	
-	if isStorm {
-		lightningColor := wuiColor(appConfig.Colors.Lightning)
-		c.Line(w/2, 20, w/2-10, 50, lightningColor)
-		c.Line(w/2-10, 50, w/2+5, 60, lightningColor)
-		c.Line(w/2+5, 60, w/2-20, h-40, lightningColor)
-	}
-	
-	if wind > 20 {
-		windColor := wuiColor(appConfig.Colors.WindLine)
-		c.Line(10, h-50, 40, h-50, windColor)
-		c.Line(w/2, h-80, w/2+50, h-80, windColor)
-	}
-
+	// --- RAINBOW ---
 	if rainbowScore > 10 && sunElev > 0 {
 		rainbowColors := []wui.Color{}
 		for _, col := range appConfig.Colors.RainbowColors {
@@ -1274,9 +1280,117 @@ func onMainCanvasPaint(c *wui.Canvas) {
 			c.Arc(cx-r+3, cy-r+3, r*2-6, r*2-6, 270, 180, col)
 		}
 	}
+
+	// --- GROUND ---
+	c.FillEllipse(-50, h-40, w/2+100, 100, groundColor1)
+	c.FillEllipse(w/2-50, h-60, w/2+100, 150, groundColor2)
+
+	// --- FOG ---
+	if isFog {
+		fogColor := wuiColor(appConfig.Colors.CloudLightGray)
+		for i := 0; i < 6; i++ {
+			drift := int(float64(animFrame) * 0.5)
+			cx := (i * 70 + drift) % (w + 150) - 75
+			cy := h - 70 + (i*10)%30
+			c.FillEllipse(cx, cy, 180, 50, fogColor)
+		}
+	}
+
+	// --- PRECIPITATION (Rain, Snow, Hail, Drizzle) ---
+	windOffset := int(wind / 3) // Dynamic horizontal drift based on wind speed
 	
-	info := fmt.Sprintf("%s | Temp: %.1f° | Wind: %.1f | Rain: %.0f%% | Bow: %d%%", targetHour.Time.Format("Mon 15:04"), temp, wind, precip, rainbowScore)
-	c.TextOut(5, 5, info, wui.RGB(255,255,255))
+	if isPrecipitating {
+		dropColor := wuiColor(appConfig.Colors.RainDrop)
+		numDrops := 40
+		
+		// Map intensity based on strict WMO codes
+		if isDrizzle {
+			numDrops = 20
+			dropColor = wuiColor(appConfig.Colors.CloudLightGray) // Fine, light mist
+		} else if isRain {
+			if code == 65 || code == 82 { numDrops = 150 } // Heavy rain
+		} else if isSnow {
+			dropColor = wuiColor(appConfig.Colors.SnowDrop)
+			numDrops = 80
+			if code == 75 || code == 86 { numDrops = 200 } // Heavy snow
+			if isBlizzard { numDrops = 350 } // Blizzard whiteout conditions
+		} else if isHail {
+			dropColor = wuiColor(appConfig.Colors.SnowDrop)
+			numDrops = 60
+		}
+
+		for i := 0; i < numDrops; i++ {
+			x := (i * 67) % w // Pseudo-random spread
+			
+			if isSnow {
+				fallSpeed := (i%2 + 1) * 2
+				if isBlizzard { fallSpeed = (i%3 + 3) * 3 } // Faster lateral movement in storms
+				
+				y := (i*17 + int(animFrame)*fallSpeed) % h
+				
+				// Apply sine wave drift for snow fluttering + standard wind
+				drift := int(math.Sin(float64(animFrame)*0.05+float64(i))*10) + int(wind)
+				x = (x + drift + w) % w
+				
+				flakeSize := (i%2) + 2
+				if isBlizzard { flakeSize = 1 + (i%2) } // Smaller, violently blowing chunks
+				
+				c.FillRect(x, y, flakeSize, flakeSize, dropColor)
+				
+			} else if isHail {
+				fallSpeed := (i%2 + 4) * 5
+				y := (i*17 + int(animFrame)*fallSpeed) % h
+				x = (x + windOffset + w) % w
+				
+				c.FillEllipse(x, y, 4, 4, dropColor) // Round hail pellets
+				
+			} else {
+				// Rain & Drizzle Logic
+				fallSpeed := (i%3 + 3) * 5
+				length := fallSpeed
+				
+				if isDrizzle { 
+					fallSpeed = (i%2 + 1) * 3
+					length = 3
+				}
+				if code == 65 || code == 82 { fallSpeed += 5 } // Heavy rain falls faster
+				
+				y := (i*23 + int(animFrame)*fallSpeed) % h
+				x = (x + windOffset + w) % w
+				
+				c.Line(x, y, x-windOffset, y+length, dropColor)
+			}
+		}
+	}
+	
+	// --- THUNDERSTORM / LIGHTNING ---
+	if isThunderstorm {
+		if animFrame%30 == 0 || animFrame%30 == 1 {
+			lightningColor := wuiColor(appConfig.Colors.Lightning)
+			lx := w/2 + (int(animFrame*7) % 100) - 50 // Randomize lightning strike position
+			c.Line(lx, 20, lx-15, 60, lightningColor)
+			c.Line(lx-15, 60, lx+10, 75, lightningColor)
+			c.Line(lx+10, 75, lx-30, h-40, lightningColor)
+			
+			// Secondary branches
+			if i := int(animFrame) % 2; i == 0 {
+				c.Line(lx-15, 60, lx-40, 80, lightningColor)
+			}
+		}
+	}
+	
+	// --- WIND DIRT/LINES (Visualizing high wind when clear) ---
+	if wind > 20 && !isSnow {
+		windColor := wuiColor(appConfig.Colors.WindLine)
+		offset1 := (int(animFrame) * int(wind/4)) % w
+		offset2 := (int(animFrame) * int(wind/3)) % w
+		c.Line(offset1, h-50, offset1+30, h-50, windColor)
+		c.Line((offset2+w/2)%w, h-80, (offset2+w/2)%w+40, h-80, windColor)
+	}
+	
+	// --- INFO OVERLAY ---
+	info := fmt.Sprintf("%s | Temp: %.1f° | Wind: %.1f | Rain Prob: %.0f%%", targetHour.Time.Format("Mon 15:04"), temp, wind, precipProb)
+	c.TextOut(5, c.Height() - 15, info, wui.RGB(255,255,255))
 }
 
 func createUI() {
@@ -1530,6 +1644,16 @@ func main() {
 	}
 	
 	createUI()
+	
+	go func() {
+		ticker := time.NewTicker(50 * time.Millisecond)
+		for range ticker.C {
+			animFrame++
+			if mainCanvas != nil {
+				mainCanvas.Paint()
+			}
+		}
+	}()
 	
 	getUserLocationAsync(func(lat, lon float64, city, country string, err error) {
 		if err == nil {
