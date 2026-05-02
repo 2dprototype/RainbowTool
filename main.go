@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,6 +72,40 @@ type GeocodingResult struct {
 	} `json:"results"`
 }
 
+type RGBColor [3]uint8
+
+type AppConfig struct {
+	Colors struct {
+		SkyDayDay           RGBColor `json:"sky_day_day"`
+		SkyNight            RGBColor `json:"sky_night"`
+		SkySunset           RGBColor `json:"sky_sunset"`
+		GroundGreen1        RGBColor `json:"ground_green_1"`
+		GroundGreen2        RGBColor `json:"ground_green_2"`
+		GroundSnow1         RGBColor `json:"ground_snow_1"`
+		GroundSnow2         RGBColor `json:"ground_snow_2"`
+		GroundDesert1       RGBColor `json:"ground_desert_1"`
+		GroundDesert2       RGBColor `json:"ground_desert_2"`
+		GroundStorm1        RGBColor `json:"ground_storm_1"`
+		GroundStorm2        RGBColor `json:"ground_storm_2"`
+		CloudWhite          RGBColor `json:"cloud_white"`
+		CloudLightGray      RGBColor `json:"cloud_light_gray"`
+		CloudDarkGray       RGBColor `json:"cloud_dark_gray"`
+		CloudStorm          RGBColor `json:"cloud_storm"`
+		RainDrop            RGBColor `json:"rain_drop"`
+		SnowDrop            RGBColor `json:"snow_drop"`
+		Lightning           RGBColor `json:"lightning"`
+		WindLine            RGBColor `json:"wind_line"`
+		SunInner            RGBColor `json:"sun_inner"`
+		SunOuter            RGBColor `json:"sun_outer"`
+		Moon                RGBColor `json:"moon"`
+		MoonCrater          RGBColor `json:"moon_crater"`
+		Star                RGBColor `json:"star"`
+		CanvasBackground    RGBColor `json:"canvas_background"`
+		RainbowColors       []RGBColor `json:"rainbow_colors"`
+	} `json:"colors"`
+	Verifications map[string]bool `json:"verifications"`
+}
+
 // ---------------------------------------------------------------------
 // Global UI elements
 // ---------------------------------------------------------------------
@@ -120,6 +155,16 @@ var (
 	// logging
 	logFile *os.File
 	logger  *log.Logger
+
+	// config
+	appConfig  AppConfig
+	configPath string
+
+	// new ui elements
+	editLat       *wui.EditLine
+	editLon       *wui.EditLine
+	btnUpdateLoc  *wui.Button
+	checkVerified *wui.CheckBox
 )
 
 type geocodingItem struct {
@@ -146,6 +191,90 @@ type HourlyData struct {
 	CloudCover         float64
 	RelativeHumidity2m float64
 	WindSpeed10m       float64
+}
+
+func initDefaultConfig() {
+	appConfig = AppConfig{
+		Verifications: make(map[string]bool),
+	}
+	appConfig.Colors.SkyDayDay = RGBColor{135, 206, 235}
+	appConfig.Colors.SkyNight = RGBColor{5, 5, 20}
+	appConfig.Colors.SkySunset = RGBColor{255, 140, 0}
+	appConfig.Colors.GroundGreen1 = RGBColor{34, 139, 34}
+	appConfig.Colors.GroundGreen2 = RGBColor{46, 139, 87}
+	appConfig.Colors.GroundSnow1 = RGBColor{240, 248, 255}
+	appConfig.Colors.GroundSnow2 = RGBColor{255, 250, 250}
+	appConfig.Colors.GroundDesert1 = RGBColor{237, 201, 175}
+	appConfig.Colors.GroundDesert2 = RGBColor{210, 180, 140}
+	appConfig.Colors.GroundStorm1 = RGBColor{25, 100, 25}
+	appConfig.Colors.GroundStorm2 = RGBColor{35, 100, 50}
+	appConfig.Colors.CloudWhite = RGBColor{255, 255, 255}
+	appConfig.Colors.CloudLightGray = RGBColor{200, 200, 200}
+	appConfig.Colors.CloudDarkGray = RGBColor{100, 100, 100}
+	appConfig.Colors.CloudStorm = RGBColor{50, 50, 60}
+	appConfig.Colors.RainDrop = RGBColor{150, 150, 200}
+	appConfig.Colors.SnowDrop = RGBColor{255, 255, 255}
+	appConfig.Colors.Lightning = RGBColor{255, 255, 0}
+	appConfig.Colors.WindLine = RGBColor{200, 200, 200}
+	appConfig.Colors.SunInner = RGBColor{255, 255, 0}
+	appConfig.Colors.SunOuter = RGBColor{255, 255, 150}
+	appConfig.Colors.Moon = RGBColor{200, 200, 220}
+	appConfig.Colors.MoonCrater = RGBColor{170, 170, 190}
+	appConfig.Colors.Star = RGBColor{255, 255, 255}
+	appConfig.Colors.CanvasBackground = RGBColor{200, 200, 200}
+	appConfig.Colors.RainbowColors = []RGBColor{
+		{255, 0, 0}, {255, 127, 0}, {255, 255, 0},
+		{0, 255, 0}, {0, 0, 255}, {75, 0, 130}, {148, 0, 211},
+	}
+}
+
+func loadConfig() {
+	exePath, err := os.Executable()
+	if err != nil {
+		initDefaultConfig()
+		return
+	}
+	
+	exeDir := filepath.Dir(exePath)
+	exeName := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
+	configPath = filepath.Join(exeDir, exeName+".json")
+	
+	file, err := os.Open(configPath)
+	if err != nil {
+		initDefaultConfig()
+		saveConfig()
+		return
+	}
+	defer file.Close()
+	
+	if err := json.NewDecoder(file).Decode(&appConfig); err != nil {
+		initDefaultConfig()
+	}
+	
+	if appConfig.Verifications == nil {
+		appConfig.Verifications = make(map[string]bool)
+	}
+	if len(appConfig.Colors.RainbowColors) == 0 {
+		initDefaultConfig()
+		saveConfig()
+	}
+}
+
+func saveConfig() {
+	if configPath == "" {
+		return
+	}
+	
+	data, err := json.MarshalIndent(appConfig, "", "  ")
+	if err != nil {
+		return
+	}
+	
+	os.WriteFile(configPath, data, 0644)
+}
+
+func wuiColor(c RGBColor) wui.Color {
+	return wui.RGB(c[0], c[1], c[2])
 }
 
 // ---------------------------------------------------------------------
@@ -624,6 +753,11 @@ func updateHourlyTable() {
 		if score, exists := rainbowScores[hour.Time.Unix()]; exists {
 			rainStr = fmt.Sprintf("%d%% 🌈", score)
 		}
+		
+		ts := fmt.Sprintf("%d", hour.Time.Unix())
+		if appConfig.Verifications[ts] {
+			rainStr += " ✅"
+		}
 
 		row := hourlyTable.RowCount()
 		hourlyTable.SetCell(0, row, hour.Time.Format("03:04 PM"))
@@ -744,6 +878,11 @@ func onHourlyTableSelection() {
 	
 	selectedHourData = &hourlyData[selectedRow]
 	
+	ts := fmt.Sprintf("%d", selectedHourData.Time.Unix())
+	if checkVerified != nil {
+		checkVerified.SetChecked(appConfig.Verifications[ts])
+	}
+	
 	if mainCanvas != nil {
 		mainCanvas.Paint()
 	}
@@ -796,57 +935,80 @@ func onSearchEditChange() {
 }
 
 func onSearchComboChange(index int) {
-	if index < 0 || index >= len(searchItems) {
-		return
-	}
-	selected := searchItems[index]
-	searchItems = nil
-	updateSearchCombo()
-	searchCombo.SetVisible(false)
-	currentLat = selected.Lat
-	currentLon = selected.Lon
-	locationName = selected.Name
-	countryName = selected.Country
-	// searchEdit.SetText("")
-	searchEdit.SetText(locationName + ", " + countryName)
-	
-	// Reset selected day when changing location
-	selectedDayData = nil
-	selectedHourlyData = nil
-	selectedDate = "today"
-	selectedHourData = nil
-	
-	updateData()
+    if index < 0 || index >= len(searchItems) {
+        return
+    }
+    selected := searchItems[index]
+    searchItems = nil
+    updateSearchCombo()
+    searchCombo.SetVisible(false)
+    currentLat = selected.Lat
+    currentLon = selected.Lon
+    locationName = selected.Name
+    countryName = selected.Country
+    
+    // UPDATE: Set lat/lon input fields with the searched coordinates
+    if editLat != nil {
+        editLat.SetText(fmt.Sprintf("%.4f", currentLat))
+    }
+    if editLon != nil {
+        editLon.SetText(fmt.Sprintf("%.4f", currentLon))
+    }
+    
+    searchEdit.SetText(locationName + ", " + countryName)
+    
+    // Reset selected day when changing location
+    selectedDayData = nil
+    selectedHourlyData = nil
+    selectedDate = "today"
+    selectedHourData = nil
+    
+    updateData()
 }
 
 func onGeoClick() {
-	btnGeo.SetEnabled(false)
-	btnGeo.SetText("⏳")
-	
-	getUserLocationAsync(func(lat, lon float64, city, country string, err error) {
-		if err != nil {
-			lat, lon, city, country = 40.71, -74.00, "New York", "US"
-		}
-		currentLat = lat
-		currentLon = lon
-		locationName = city
-		countryName = country
-		
-		// Reset selected day when changing location
-		selectedDayData = nil
-		selectedHourlyData = nil
-		selectedDate = "today"
-		selectedHourData = nil
-		
-		updateData()
-		
-		btnGeo.SetEnabled(true)
-		btnGeo.SetText("📍")
-	})
+    btnGeo.SetEnabled(false)
+    btnGeo.SetText("⏳")
+    
+    getUserLocationAsync(func(lat, lon float64, city, country string, err error) {
+        if err != nil {
+            lat, lon, city, country = 40.71, -74.00, "New York", "US"
+        }
+        currentLat = lat
+        currentLon = lon
+        locationName = city
+        countryName = country
+        
+        // UPDATE: Set lat/lon input fields with geo coordinates
+        if editLat != nil {
+            editLat.SetText(fmt.Sprintf("%.4f", currentLat))
+        }
+        if editLon != nil {
+            editLon.SetText(fmt.Sprintf("%.4f", currentLon))
+        }
+        
+        // Reset selected day when changing location
+        selectedDayData = nil
+        selectedHourlyData = nil
+        selectedDate = "today"
+        selectedHourData = nil
+        
+        updateData()
+        
+        btnGeo.SetEnabled(true)
+        btnGeo.SetText("📍")
+    })
 }
 
 func updateData() {
 	labelLocation.SetText("Loading weather data...")
+	
+	if editLat != nil {
+		editLat.SetText(fmt.Sprintf("%.4f", currentLat))
+	}
+	if editLon != nil {
+		editLon.SetText(fmt.Sprintf("%.4f", currentLon))
+	}
 	
 	// Reset selected day when fetching new data
 	selectedDayData = nil
@@ -912,22 +1074,18 @@ SCALE:
 }
 
 func onColorCanvasPaint(c *wui.Canvas) {
-	colors := []wui.Color{
-		wui.RGB(255, 0, 0),    // Red
-		wui.RGB(255, 127, 0),  // Orange
-		wui.RGB(255, 255, 0),  // Yellow
-		wui.RGB(0, 255, 0),    // Green
-		wui.RGB(0, 0, 255),    // Blue
-		wui.RGB(75, 0, 130),   // Indigo
-		wui.RGB(148, 0, 211),  // Violet
+	colors := []wui.Color{}
+	for _, col := range appConfig.Colors.RainbowColors {
+		colors = append(colors, wuiColor(col))
 	}
 	
 	w, h := c.Size()
-	rectWidth := w / len(colors)
-	
-	for i, col := range colors {
-		x := i * rectWidth
-		c.FillRect(x, 0, rectWidth, h, col)
+	if len(colors) > 0 {
+		rectWidth := w / len(colors)
+		for i, col := range colors {
+			x := i * rectWidth
+			c.FillRect(x, 0, rectWidth, h, col)
+		}
 	}
 }
 
@@ -935,7 +1093,7 @@ func onMainCanvasPaint(c *wui.Canvas) {
 	w, h := c.Size()
 	
 	if weatherCache == nil {
-		c.FillRect(0, 0, w, h, wui.RGB(200, 200, 200))
+		c.FillRect(0, 0, w, h, wuiColor(appConfig.Colors.CanvasBackground))
 		c.TextOut(10, 10, "Loading...", wui.RGB(0,0,0))
 		return
 	}
@@ -990,39 +1148,40 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		rainbowScore = preds[0].Score
 	}
 	
-	groundColor1 := wui.RGB(34, 139, 34) // Default Green
-	groundColor2 := wui.RGB(46, 139, 87)
+	groundColor1 := wuiColor(appConfig.Colors.GroundGreen1)
+	groundColor2 := wuiColor(appConfig.Colors.GroundGreen2)
 	
 	if temp < 0 || (code >= 71 && code <= 86) {
-		groundColor1 = wui.RGB(240, 248, 255) // Alice Blue
-		groundColor2 = wui.RGB(255, 250, 250) // Snow
+		groundColor1 = wuiColor(appConfig.Colors.GroundSnow1)
+		groundColor2 = wuiColor(appConfig.Colors.GroundSnow2)
 	} else if temp > 30 && humidity < 30 {
-		groundColor1 = wui.RGB(237, 201, 175) // Desert Sand
-		groundColor2 = wui.RGB(210, 180, 140) // Tan
+		groundColor1 = wuiColor(appConfig.Colors.GroundDesert1)
+		groundColor2 = wuiColor(appConfig.Colors.GroundDesert2)
 	} else if precip > 80 || code >= 95 {
-		groundColor1 = wui.RGB(25, 100, 25) 
-		groundColor2 = wui.RGB(35, 100, 50)
+		groundColor1 = wuiColor(appConfig.Colors.GroundStorm1)
+		groundColor2 = wuiColor(appConfig.Colors.GroundStorm2)
 	}
 
-	skyBaseR, skyBaseG, skyBaseB := uint8(135), uint8(206), uint8(235) // Light sky blue
+	skyColor := appConfig.Colors.SkyDayDay
 	if sunElev < -5 {
-		skyBaseR, skyBaseG, skyBaseB = 5, 5, 20 // Night
+		skyColor = appConfig.Colors.SkyNight
 	} else if sunElev < 10 {
-		skyBaseR, skyBaseG, skyBaseB = 255, 140, 0 // Sunset/Sunrise orange
+		skyColor = appConfig.Colors.SkySunset
 	}
 	
 	cloudDarken := uint8(cloudCover * 0.8) // max darken
-	skyR := uint8(math.Max(0, float64(skyBaseR)-float64(cloudDarken)))
-	skyG := uint8(math.Max(0, float64(skyBaseG)-float64(cloudDarken)))
-	skyB := uint8(math.Max(0, float64(skyBaseB)-float64(cloudDarken)))
+	skyR := uint8(math.Max(0, float64(skyColor[0])-float64(cloudDarken)))
+	skyG := uint8(math.Max(0, float64(skyColor[1])-float64(cloudDarken)))
+	skyB := uint8(math.Max(0, float64(skyColor[2])-float64(cloudDarken)))
 	
 	c.FillRect(0, 0, w, h, wui.RGB(skyR, skyG, skyB))
 	
 	if sunElev < -5 && cloudCover < 50 {
-		c.FillRect(20, 20, 2, 2, wui.RGB(255,255,255))
-		c.FillRect(120, 30, 2, 2, wui.RGB(255,255,255))
-		c.FillRect(200, 15, 2, 2, wui.RGB(255,255,255))
-		c.FillRect(350, 40, 2, 2, wui.RGB(255,255,255))
+		starColor := wuiColor(appConfig.Colors.Star)
+		c.FillRect(20, 20, 2, 2, starColor)
+		c.FillRect(120, 30, 2, 2, starColor)
+		c.FillRect(200, 15, 2, 2, starColor)
+		c.FillRect(350, 40, 2, 2, starColor)
 	}
 	
 	sunX := 80
@@ -1031,19 +1190,19 @@ func onMainCanvasPaint(c *wui.Canvas) {
 	if sunY < 20 { sunY = 20 }
 	
 	if sunElev >= -5 {
-		c.FillEllipse(sunX-5, sunY-5, 50, 50, wui.RGB(255, 255, 150))
-		c.FillEllipse(sunX, sunY, 40, 40, wui.RGB(255, 255, 0))
+		c.FillEllipse(sunX-5, sunY-5, 50, 50, wuiColor(appConfig.Colors.SunOuter))
+		c.FillEllipse(sunX, sunY, 40, 40, wuiColor(appConfig.Colors.SunInner))
 	} else {
-		c.FillEllipse(sunX, 20, 30, 30, wui.RGB(200, 200, 220))
-		c.FillEllipse(sunX+5, 25, 8, 8, wui.RGB(170, 170, 190))
-		c.FillEllipse(sunX+15, 35, 10, 10, wui.RGB(170, 170, 190))
+		c.FillEllipse(sunX, 20, 30, 30, wuiColor(appConfig.Colors.Moon))
+		c.FillEllipse(sunX+5, 25, 8, 8, wuiColor(appConfig.Colors.MoonCrater))
+		c.FillEllipse(sunX+15, 35, 10, 10, wuiColor(appConfig.Colors.MoonCrater))
 	}
 
 	if cloudCover > 10 {
-		cloudColor := wui.RGB(255, 255, 255)
-		if cloudCover > 50 { cloudColor = wui.RGB(200, 200, 200) }
-		if cloudCover > 80 { cloudColor = wui.RGB(100, 100, 100) }
-		if code >= 95 { cloudColor = wui.RGB(50, 50, 60) }
+		cloudColor := wuiColor(appConfig.Colors.CloudWhite)
+		if cloudCover > 50 { cloudColor = wuiColor(appConfig.Colors.CloudLightGray) }
+		if cloudCover > 80 { cloudColor = wuiColor(appConfig.Colors.CloudDarkGray) }
+		if code >= 95 { cloudColor = wuiColor(appConfig.Colors.CloudStorm) }
 		
 		numClouds := int(cloudCover / 10)
 		for i := 0; i < numClouds; i++ {
@@ -1063,9 +1222,9 @@ func onMainCanvasPaint(c *wui.Canvas) {
 	windOffset := int(wind / 5)
 	
 	if precip > 0 {
-		dropColor := wui.RGB(150, 150, 200)
+		dropColor := wuiColor(appConfig.Colors.RainDrop)
 		if isSnow {
-			dropColor = wui.RGB(255, 255, 255)
+			dropColor = wuiColor(appConfig.Colors.SnowDrop)
 		}
 		
 		numDrops := int(precip)
@@ -1084,21 +1243,22 @@ func onMainCanvasPaint(c *wui.Canvas) {
 	}
 	
 	if isStorm {
-		c.Line(w/2, 20, w/2-10, 50, wui.RGB(255, 255, 0))
-		c.Line(w/2-10, 50, w/2+5, 60, wui.RGB(255, 255, 0))
-		c.Line(w/2+5, 60, w/2-20, h-40, wui.RGB(255, 255, 0))
+		lightningColor := wuiColor(appConfig.Colors.Lightning)
+		c.Line(w/2, 20, w/2-10, 50, lightningColor)
+		c.Line(w/2-10, 50, w/2+5, 60, lightningColor)
+		c.Line(w/2+5, 60, w/2-20, h-40, lightningColor)
 	}
 	
 	if wind > 20 {
-		windColor := wui.RGB(200, 200, 200)
+		windColor := wuiColor(appConfig.Colors.WindLine)
 		c.Line(10, h-50, 40, h-50, windColor)
 		c.Line(w/2, h-80, w/2+50, h-80, windColor)
 	}
 
 	if rainbowScore > 10 && sunElev > 0 {
-		colors := []wui.Color{
-			wui.RGB(255, 0, 0), wui.RGB(255, 127, 0), wui.RGB(255, 255, 0),
-			wui.RGB(0, 255, 0), wui.RGB(0, 0, 255), wui.RGB(75, 0, 130), wui.RGB(148, 0, 211),
+		rainbowColors := []wui.Color{}
+		for _, col := range appConfig.Colors.RainbowColors {
+			rainbowColors = append(rainbowColors, wuiColor(col))
 		}
 		
 		cx := w / 2 + 50
@@ -1106,7 +1266,7 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		radius := 110 + int(sunElev)
 		if radius > w/2 { radius = w/2 }
 		
-		for i, col := range colors {
+		for i, col := range rainbowColors {
 			r := radius - (i * 5)
 			c.Arc(cx-r, cy-r, r*2, r*2, 270, 180, col)
 			c.Arc(cx-r+1, cy-r+1, r*2-2, r*2-2, 270, 180, col)
@@ -1138,32 +1298,70 @@ func createUI() {
 	logo.SetFont(logoFont)
 	mainWindow.Add(logo)
 
+	// LAT/LON inputs (moved to left side, where search used to be)
+	latLabel := wui.NewLabel()
+	latLabel.SetBounds(180, 12, 25, 24)
+	latLabel.SetText("Lat:")
+	mainWindow.Add(latLabel)
+
+	editLat = wui.NewEditLine()
+	editLat.SetBounds(210, 12, 70, 24)
+	editLat.SetText("40.71")
+	mainWindow.Add(editLat)
+
+	lonLabel := wui.NewLabel()
+	lonLabel.SetBounds(285, 12, 25, 24)
+	lonLabel.SetText("Lon:")
+	mainWindow.Add(lonLabel)
+
+	editLon = wui.NewEditLine()
+	editLon.SetBounds(315, 12, 70, 24)
+	editLon.SetText("-74.00")
+	mainWindow.Add(editLon)
+
+	btnUpdateLoc = wui.NewButton()
+	btnUpdateLoc.SetBounds(390, 12, 40, 24)
+	btnUpdateLoc.SetText("Go")
+	btnUpdateLoc.SetOnClick(func() {
+		latStr := editLat.Text()
+		lonStr := editLon.Text()
+		lat, err1 := strconv.ParseFloat(latStr, 64)
+		lon, err2 := strconv.ParseFloat(lonStr, 64)
+		if err1 == nil && err2 == nil {
+			currentLat = lat
+			currentLon = lon
+			locationName = fmt.Sprintf("%.2f, %.2f", lat, lon)
+			countryName = ""
+			selectedDayData = nil
+			selectedHourlyData = nil
+			selectedDate = "today"
+			selectedHourData = nil
+			updateData()
+		}
+	})
+	mainWindow.Add(btnUpdateLoc)
+
+	// Search section (moved to right side, where lat/lon used to be)
 	searchEdit = wui.NewEditLine()
-	searchEdit.SetBounds(405, 12, 145, 24)
+	searchEdit.SetBounds(440, 12, 120, 24)
 	searchEdit.SetText("")
 	searchEdit.SetOnTextChange(onSearchEditChange)
 	mainWindow.Add(searchEdit)
 
 	searchCombo = wui.NewComboBox()
-	searchCombo.SetBounds(405, 38, 145, 100)
+	searchCombo.SetBounds(440, 38, 120, 100)
 	searchCombo.SetVisible(false)
 	searchCombo.SetOnChange(onSearchComboChange)
 	mainWindow.Add(searchCombo)
 
 	buttonSearch := wui.NewButton()
-	buttonSearch.SetBounds(555, 12, 55, 24)
+	buttonSearch.SetBounds(565, 12, 50, 24)
 	buttonSearch.SetText("Search")
 	buttonSearch.SetOnClick(func() { onSearchEditChange() })
 	mainWindow.Add(buttonSearch)
 
 	btnGeo = wui.NewButton()
-	btnGeo.SetBounds(615, 12, 28, 24)
-	btnGeo.SetText("📍")
-	btnGeo.SetOnClick(onGeoClick)
-	mainWindow.Add(btnGeo)
-
-	btnGeo = wui.NewButton()
-	btnGeo.SetBounds(615, 12, 28, 24)
+	btnGeo.SetBounds(620, 12, 28, 24)
 	btnGeo.SetText("📍")
 	btnGeo.SetOnClick(onGeoClick)
 	mainWindow.Add(btnGeo)
@@ -1253,7 +1451,7 @@ func createUI() {
 	}
 	
 	btnHelp := wui.NewButton()
-	btnHelp.SetBounds(80, 120, 14, 14)
+	btnHelp.SetBounds(110, 120, 14, 14)
 	font, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -10, Bold: false})
 	btnHelp.SetFont(font)
 	btnHelp.SetText("?")
@@ -1269,6 +1467,23 @@ func createUI() {
 	fontTable, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -12, Bold: true})
 	labelHourly.SetFont(fontTable)
 	mainWindow.Add(labelHourly)
+	
+	checkVerified = wui.NewCheckBox()
+	checkVerified.SetBounds(140, 255, 120, 16)
+	checkVerified.SetText("Verified Rainbow")
+	checkVerified.SetOnChange(func(checked bool) {
+		if selectedHourData != nil {
+			ts := fmt.Sprintf("%d", selectedHourData.Time.Unix())
+			if checked {
+				appConfig.Verifications[ts] = true
+			} else {
+				delete(appConfig.Verifications, ts)
+			}
+			saveConfig()
+			updateHourlyTable()
+		}
+	})
+	mainWindow.Add(checkVerified)
 
 	hourlyTable = wui.NewStringTable("🕒 Hour", "Icon", "Temp", "Rainbow", "Sun Angle")
 	hourlyTable.SetBounds(10, 275, 310, 135)
@@ -1308,6 +1523,8 @@ func createUI() {
 }
 
 func main() {
+	loadConfig()
+
 	if err := setupLogging(); err != nil {
 		fmt.Printf("Warning: Could not setup logging: %v\n", err)
 	}
