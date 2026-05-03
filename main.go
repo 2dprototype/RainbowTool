@@ -57,7 +57,6 @@ type Hourly struct {
 	DirectRadiation    []float64 `json:"direct_radiation"` // NEW: Direct sunlight
 }
 
-
 type Daily struct {
 	Time                 []string  `json:"time"`
 	Temperature2mMax     []float64 `json:"temperature_2m_max"`
@@ -119,7 +118,7 @@ type AppConfig struct {
 		RainbowColors    []RGBColor `json:"rainbow_colors"`
 	} `json:"colors"`
 	Verifications map[string]VerificationData `json:"verifications"`
-	ThemeName     string                     `json:"theme_name"`
+	ThemeName     string                      `json:"theme_name"`
 }
 
 // ---------------------------------------------------------------------
@@ -151,8 +150,9 @@ var (
 	verifiedTable *wui.StringTable
 
 	// canvases
-	mainCanvas  *wui.PaintBox
-	colorCanvas *wui.PaintBox
+	mainCanvas     *wui.PaintBox
+	colorCanvas    *wui.PaintBox
+	analysisCanvas *wui.PaintBox
 
 	// state
 	currentLat          float64 = 40.71
@@ -458,7 +458,6 @@ func getSolarElevationUTC(lat, lon float64, utc time.Time) float64 {
 	return math.Asin(sinAlt) * (180.0 / math.Pi)
 }
 
-
 type rainbowPred struct {
 	Time       time.Time
 	Score      int
@@ -487,7 +486,7 @@ func predictRainbow(hourlyData []HourlyData, lat, lon float64, tzOffsetHours flo
 		if hourlyData[i].Temperature2m <= 0 {
 			continue // Snow and ice crystals create halos, not rainbows
 		}
-		
+
 		code := hourlyData[i].WeatherCode
 		if (code >= 71 && code <= 77) || (code >= 85 && code <= 86) {
 			continue // Snowing
@@ -507,7 +506,7 @@ func predictRainbow(hourlyData []HourlyData, lat, lon float64, tzOffsetHours flo
 		// 3. PRECIPITATION VOLUME SCORE (Max 25) - We need liquid water in the air
 		precip := hourlyData[i].Precipitation
 		precipProb := hourlyData[i].PrecipitationProb
-		
+
 		if precip >= 0.1 && precip <= 5.0 {
 			score += 25.0 // Ideal, steady rain
 		} else if precip > 5.0 {
@@ -519,7 +518,7 @@ func predictRainbow(hourlyData []HourlyData, lat, lon float64, tzOffsetHours flo
 		// 4. DIRECT SUNLIGHT SCORE (Max 30) - Overrides generic cloud cover
 		radiation := hourlyData[i].DirectRadiation
 		cloud := hourlyData[i].CloudCover
-		
+
 		if radiation > 100 {
 			score += 30.0 // Bright, direct sun hitting the raindrops
 		} else if radiation > 20 {
@@ -550,7 +549,7 @@ func predictRainbow(hourlyData []HourlyData, lat, lon float64, tzOffsetHours flo
 		if humidity > 65 {
 			score += 5.0 // High humidity slows droplet evaporation
 		}
-		
+
 		// fmt.Println(cloud, precip, vis)
 
 		// --- SEVERE PENALTIES ---
@@ -1057,6 +1056,9 @@ func onDailyTableSelection() {
 	updateCurrentWeather()
 	updateFeatures()
 	updateHourlyTable()
+	if analysisCanvas != nil {
+		analysisCanvas.Paint()
+	}
 }
 
 func onHourlyTableSelection() {
@@ -1086,6 +1088,9 @@ func onHourlyTableSelection() {
 
 	if mainCanvas != nil {
 		mainCanvas.Paint()
+	}
+	if analysisCanvas != nil {
+		analysisCanvas.Paint()
 	}
 }
 
@@ -1233,6 +1238,10 @@ func updateData() {
 			updateHourlyTable()
 			updateDailyTable()
 			updateVerifiedTable()
+
+			if analysisCanvas != nil {
+				analysisCanvas.Paint()
+			}
 
 			logWeatherData(w, currentLat, currentLon, locationName+", "+countryName)
 		} else if err != nil {
@@ -1514,7 +1523,6 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		}
 	}
 
-
 	c.FillEllipse(-50, h-40, w/2+100, 100, groundColor1)
 	c.FillEllipse(w/2-50, h-60, w/2+100, 150, groundColor2)
 
@@ -1792,6 +1800,9 @@ func onVerifiedTableSelection() {
 		updateCurrentWeather()
 		updateFeatures()
 		updateHourlyTable()
+		if analysisCanvas != nil {
+			analysisCanvas.Paint()
+		}
 	} else {
 		// Need to fetch
 		isHistorical := t.Before(time.Now().AddDate(0, 0, -80))
@@ -1840,8 +1851,86 @@ func onVerifiedTableSelection() {
 			updateFeatures()
 			updateHourlyTable()
 			updateDailyTable()
+			if analysisCanvas != nil {
+				analysisCanvas.Paint()
+			}
 		}()
 	}
+}
+
+func onAnalysisCanvasPaint(c *wui.Canvas) {
+	w, h := c.Size()
+	c.FillRect(0, 0, w, h, wui.RGB(30, 30, 40)) // Dark background
+
+	var hourlyData []HourlyData
+	if selectedHourlyData != nil && len(selectedHourlyData) > 0 {
+		hourlyData = selectedHourlyData
+	} else if weatherCache != nil {
+		hourlyData = extractHourlyDataForDay(weatherCache, time.Now())
+	}
+
+	if len(hourlyData) == 0 {
+		c.TextOut(10, 10, "No data", wui.RGB(200, 200, 200))
+		return
+	}
+
+	// Draw Grid
+	gridColor := wui.RGB(60, 60, 70)
+	for i := 0; i <= 4; i++ {
+		y := i * (h - 20) / 4
+		c.Line(0, y+10, w, y+10, gridColor)
+	}
+
+	// Scale
+	minTemp, maxTemp := 100.0, -100.0
+	for _, d := range hourlyData {
+		if d.Temperature2m < minTemp {
+			minTemp = d.Temperature2m
+		}
+		if d.Temperature2m > maxTemp {
+			maxTemp = d.Temperature2m
+		}
+	}
+	if maxTemp-minTemp < 5 {
+		maxTemp = minTemp + 5
+	}
+	minTemp -= 2
+	maxTemp += 2
+
+	tempColor := wui.RGB(255, 100, 100)
+	precipColor := wui.RGB(100, 150, 255)
+
+	pointsTemp := make([]struct{ x, y int }, len(hourlyData))
+	pointsPrecip := make([]struct{ x, y int }, len(hourlyData))
+
+	for i, d := range hourlyData {
+		x := i * w / (len(hourlyData) - 1)
+
+		// Temp Y (inverted)
+		ty := int(float64(h-20) - (d.Temperature2m-minTemp)/(maxTemp-minTemp)*float64(h-20) + 10)
+		pointsTemp[i] = struct{ x, y int }{x, ty}
+
+		// Precip Y (0-100)
+		py := int(float64(h-20) - (d.PrecipitationProb/100.0)*float64(h-20) + 10)
+		pointsPrecip[i] = struct{ x, y int }{x, py}
+	}
+
+	// Draw Precip Area
+	for i := 0; i < len(pointsPrecip)-1; i++ {
+		p1, p2 := pointsPrecip[i], pointsPrecip[i+1]
+
+		// wui doesn't have FillPolygon easily, so we draw lines
+		c.Line(p1.x, p1.y, p2.x, p2.y, precipColor)
+	}
+
+	// Draw Temp Line
+	for i := 0; i < len(pointsTemp)-1; i++ {
+		p1, p2 := pointsTemp[i], pointsTemp[i+1]
+		c.Line(p1.x, p1.y, p2.x, p2.y, tempColor)
+		c.Line(p1.x, p1.y+1, p2.x, p2.y+1, tempColor) // Thicker
+	}
+
+	c.TextOut(5, 2, "Analysis: Temp (Red) / Rain% (Blue)", wui.RGB(200, 200, 200))
 }
 
 func createUI() {
@@ -2185,6 +2274,11 @@ func createUI() {
 	mainCanvas.SetBounds(330, 80, 315, 170)
 	mainCanvas.SetOnPaint(onMainCanvasPaint)
 	mainWindow.Add(mainCanvas)
+
+	analysisCanvas = wui.NewPaintBox()
+	analysisCanvas.SetBounds(655, 80, 295, 170)
+	analysisCanvas.SetOnPaint(onAnalysisCanvasPaint)
+	mainWindow.Add(analysisCanvas)
 
 	colorCanvas = wui.NewPaintBox()
 	colorCanvas.SetBounds(526, 60, 119, 15)
