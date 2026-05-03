@@ -198,6 +198,9 @@ var (
 
 	// verified list for table
 	verifiedList []VerificationData
+
+	// analysis
+	analysisCombo *wui.ComboBox
 )
 
 type geocodingItem struct {
@@ -1874,63 +1877,133 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 		return
 	}
 
-	// Draw Grid
+	graphType := 0
+	if analysisCombo != nil {
+		graphType = analysisCombo.SelectedIndex()
+	}
+
+	lat, lon := currentLat, currentLon
+	tzOff := timezoneOffsetHours
+	if weatherCache != nil {
+		lat, lon = weatherCache.Latitude, weatherCache.Longitude
+	}
+
+	// Helper to draw grid
 	gridColor := wui.RGB(60, 60, 70)
 	for i := 0; i <= 4; i++ {
 		y := i * (h - 20) / 4
 		c.Line(0, y+10, w, y+10, gridColor)
 	}
 
-	// Scale
-	minTemp, maxTemp := 100.0, -100.0
-	for _, d := range hourlyData {
-		if d.Temperature2m < minTemp {
-			minTemp = d.Temperature2m
+	switch graphType {
+	case 0: // Temp & Rain %
+		minTemp, maxTemp := 100.0, -100.0
+		for _, d := range hourlyData {
+			if d.Temperature2m < minTemp {
+				minTemp = d.Temperature2m
+			}
+			if d.Temperature2m > maxTemp {
+				maxTemp = d.Temperature2m
+			}
 		}
-		if d.Temperature2m > maxTemp {
-			maxTemp = d.Temperature2m
+		if maxTemp-minTemp < 5 {
+			maxTemp = minTemp + 5
 		}
+		minTemp -= 2
+		maxTemp += 2
+
+		tempColor := wui.RGB(255, 100, 100)
+		precipColor := wui.RGB(100, 150, 255)
+
+		for i := 0; i < len(hourlyData)-1; i++ {
+			x1 := i * w / (len(hourlyData) - 1)
+			x2 := (i + 1) * w / (len(hourlyData) - 1)
+
+			// Temp
+			ty1 := int(float64(h-20) - (hourlyData[i].Temperature2m-minTemp)/(maxTemp-minTemp)*float64(h-20) + 10)
+			ty2 := int(float64(h-20) - (hourlyData[i+1].Temperature2m-minTemp)/(maxTemp-minTemp)*float64(h-20) + 10)
+			c.Line(x1, ty1, x2, ty2, tempColor)
+
+			// Precip
+			py1 := int(float64(h-20) - (hourlyData[i].PrecipitationProb/100.0)*float64(h-20) + 10)
+			py2 := int(float64(h-20) - (hourlyData[i+1].PrecipitationProb/100.0)*float64(h-20) + 10)
+			c.Line(x1, py1, x2, py2, precipColor)
+		}
+		c.TextOut(5, 2, "Environment: Temp (Red) / Rain% (Blue)", wui.RGB(200, 200, 200))
+
+	case 1: // Rainbow Score Trend
+		rainbows := predictRainbow(hourlyData, lat, lon, tzOff, true)
+		scores := make(map[int]int) // hour -> score
+		for _, r := range rainbows {
+			scores[r.Time.Hour()] = r.Score
+		}
+
+		scoreColor := wui.RGB(255, 255, 100)
+		for i := 0; i < len(hourlyData)-1; i++ {
+			x1 := i * w / (len(hourlyData) - 1)
+			x2 := (i + 1) * w / (len(hourlyData) - 1)
+
+			s1 := float64(scores[hourlyData[i].Time.Hour()])
+			s2 := float64(scores[hourlyData[i+1].Time.Hour()])
+
+			sy1 := int(float64(h-20) - (s1/100.0)*float64(h-20) + 10)
+			sy2 := int(float64(h-20) - (s2/100.0)*float64(h-20) + 10)
+
+			c.Line(x1, sy1, x2, sy2, scoreColor)
+			c.Line(x1, sy1+1, x2, sy2+1, scoreColor)
+		}
+		c.TextOut(5, 2, "Rainbow Analysis: Probability Score (0-100%)", wui.RGB(255, 255, 200))
+
+	case 2: // Sun Elevation Angle
+		sunColor := wui.RGB(255, 180, 50)
+		for i := 0; i < len(hourlyData)-1; i++ {
+			x1 := i * w / (len(hourlyData) - 1)
+			x2 := (i + 1) * w / (len(hourlyData) - 1)
+
+			utc1 := hourlyData[i].Time.Add(-time.Duration(tzOff) * time.Hour)
+			utc2 := hourlyData[i+1].Time.Add(-time.Duration(tzOff) * time.Hour)
+
+			e1 := getSolarElevationUTC(lat, lon, utc1)
+			e2 := getSolarElevationUTC(lat, lon, utc2)
+
+			// Scale 0 to 90 degrees
+			ey1 := int(float64(h-20) - (e1/90.0)*float64(h-20) + 10)
+			ey2 := int(float64(h-20) - (e2/90.0)*float64(h-20) + 10)
+
+			if ey1 > h {
+				ey1 = h
+			}
+			if ey2 > h {
+				ey2 = h
+			}
+
+			c.Line(x1, ey1, x2, ey2, sunColor)
+			// Rainbow possible zone (0-42)
+			if e1 > 0 && e1 < 42 {
+				c.FillRect(x1, h-5, x2-x1+1, 5, wui.RGB(0, 255, 0))
+			}
+		}
+		c.TextOut(5, 2, "Sun Analysis: Elevation Angle (Green = Potential Window)", wui.RGB(200, 200, 200))
+
+	case 3: // Cloud vs Precipitation
+		cloudColor := wui.RGB(200, 200, 200)
+		rainColor := wui.RGB(0, 120, 255)
+
+		for i := 0; i < len(hourlyData)-1; i++ {
+			x1 := i * w / (len(hourlyData) - 1)
+			x2 := (i + 1) * w / (len(hourlyData) - 1)
+
+			cy1 := int(float64(h-20) - (hourlyData[i].CloudCover/100.0)*float64(h-20) + 10)
+			cy2 := int(float64(h-20) - (hourlyData[i+1].CloudCover/100.0)*float64(h-20) + 10)
+
+			ry1 := int(float64(h-20) - (hourlyData[i].PrecipitationProb/100.0)*float64(h-20) + 10)
+			ry2 := int(float64(h-20) - (hourlyData[i+1].PrecipitationProb/100.0)*float64(h-20) + 10)
+
+			c.Line(x1, cy1, x2, cy2, cloudColor)
+			c.Line(x1, ry1, x2, ry2, rainColor)
+		}
+		c.TextOut(5, 2, "Detailed: Cloud Cover (Gray) / Precipitation Prob (Blue)", wui.RGB(200, 200, 200))
 	}
-	if maxTemp-minTemp < 5 {
-		maxTemp = minTemp + 5
-	}
-	minTemp -= 2
-	maxTemp += 2
-
-	tempColor := wui.RGB(255, 100, 100)
-	precipColor := wui.RGB(100, 150, 255)
-
-	pointsTemp := make([]struct{ x, y int }, len(hourlyData))
-	pointsPrecip := make([]struct{ x, y int }, len(hourlyData))
-
-	for i, d := range hourlyData {
-		x := i * w / (len(hourlyData) - 1)
-
-		// Temp Y (inverted)
-		ty := int(float64(h-20) - (d.Temperature2m-minTemp)/(maxTemp-minTemp)*float64(h-20) + 10)
-		pointsTemp[i] = struct{ x, y int }{x, ty}
-
-		// Precip Y (0-100)
-		py := int(float64(h-20) - (d.PrecipitationProb/100.0)*float64(h-20) + 10)
-		pointsPrecip[i] = struct{ x, y int }{x, py}
-	}
-
-	// Draw Precip Area
-	for i := 0; i < len(pointsPrecip)-1; i++ {
-		p1, p2 := pointsPrecip[i], pointsPrecip[i+1]
-
-		// wui doesn't have FillPolygon easily, so we draw lines
-		c.Line(p1.x, p1.y, p2.x, p2.y, precipColor)
-	}
-
-	// Draw Temp Line
-	for i := 0; i < len(pointsTemp)-1; i++ {
-		p1, p2 := pointsTemp[i], pointsTemp[i+1]
-		c.Line(p1.x, p1.y, p2.x, p2.y, tempColor)
-		c.Line(p1.x, p1.y+1, p2.x, p2.y+1, tempColor) // Thicker
-	}
-
-	c.TextOut(5, 2, "Analysis: Temp (Red) / Rain% (Blue)", wui.RGB(200, 200, 200))
 }
 
 func createUI() {
@@ -2274,6 +2347,20 @@ func createUI() {
 	mainCanvas.SetBounds(330, 80, 315, 170)
 	mainCanvas.SetOnPaint(onMainCanvasPaint)
 	mainWindow.Add(mainCanvas)
+
+	analysisCombo = wui.NewComboBox()
+	analysisCombo.SetBounds(655, 55, 295, 22)
+	analysisCombo.AddItem("Temperature & Rain %")
+	analysisCombo.AddItem("Rainbow Score Trend")
+	analysisCombo.AddItem("Sun Elevation Angle")
+	analysisCombo.AddItem("Cloud vs Precipitation")
+	analysisCombo.SetSelectedIndex(0)
+	analysisCombo.SetOnChange(func(index int) {
+		if analysisCanvas != nil {
+			analysisCanvas.Paint()
+		}
+	})
+	mainWindow.Add(analysisCombo)
 
 	analysisCanvas = wui.NewPaintBox()
 	analysisCanvas.SetBounds(655, 80, 295, 170)
