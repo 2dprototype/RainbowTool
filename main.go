@@ -44,21 +44,26 @@ type Current struct {
 }
 
 type Hourly struct {
-	Time                []string  `json:"time"`
-	PrecipitationProb   []float64 `json:"precipitation_probability"`
-	CloudCover          []float64 `json:"cloud_cover"`
-	Temperature2m       []float64 `json:"temperature_2m"`
-	DewPoint2m          []float64 `json:"dew_point_2m"`
-	WeatherCode         []int     `json:"weather_code"`
-	RelativeHumidity2m  []float64 `json:"relative_humidity_2m"`
-	WindSpeed10m        []float64 `json:"wind_speed_10m"`
+	Time               []string  `json:"time"`
+	PrecipitationProb  []float64 `json:"precipitation_probability"`
+	Precipitation      []float64 `json:"precipitation"` // NEW: Actual volume
+	CloudCover         []float64 `json:"cloud_cover"`
+	Temperature2m      []float64 `json:"temperature_2m"`
+	DewPoint2m         []float64 `json:"dew_point_2m"`
+	WeatherCode        []int     `json:"weather_code"`
+	RelativeHumidity2m []float64 `json:"relative_humidity_2m"`
+	WindSpeed10m       []float64 `json:"wind_speed_10m"`
+	Visibility         []float64 `json:"visibility"`       // NEW
+	DirectRadiation    []float64 `json:"direct_radiation"` // NEW: Direct sunlight
 }
+
 
 type Daily struct {
 	Time                 []string  `json:"time"`
 	Temperature2mMax     []float64 `json:"temperature_2m_max"`
 	Temperature2mMin     []float64 `json:"temperature_2m_min"`
 	PrecipitationProbMax []float64 `json:"precipitation_probability_max"`
+	PrecipitationSum     []float64 `json:"precipitation_sum"` // Added for Archive API
 	WeatherCode          []int     `json:"weather_code"`
 }
 
@@ -76,32 +81,32 @@ type RGBColor [3]uint8
 
 type AppConfig struct {
 	Colors struct {
-		SkyDayDay           RGBColor `json:"sky_day_day"`
-		SkyNight            RGBColor `json:"sky_night"`
-		SkySunset           RGBColor `json:"sky_sunset"`
-		GroundGreen1        RGBColor `json:"ground_green_1"`
-		GroundGreen2        RGBColor `json:"ground_green_2"`
-		GroundSnow1         RGBColor `json:"ground_snow_1"`
-		GroundSnow2         RGBColor `json:"ground_snow_2"`
-		GroundDesert1       RGBColor `json:"ground_desert_1"`
-		GroundDesert2       RGBColor `json:"ground_desert_2"`
-		GroundStorm1        RGBColor `json:"ground_storm_1"`
-		GroundStorm2        RGBColor `json:"ground_storm_2"`
-		CloudWhite          RGBColor `json:"cloud_white"`
-		CloudLightGray      RGBColor `json:"cloud_light_gray"`
-		CloudDarkGray       RGBColor `json:"cloud_dark_gray"`
-		CloudStorm          RGBColor `json:"cloud_storm"`
-		RainDrop            RGBColor `json:"rain_drop"`
-		SnowDrop            RGBColor `json:"snow_drop"`
-		Lightning           RGBColor `json:"lightning"`
-		WindLine            RGBColor `json:"wind_line"`
-		SunInner            RGBColor `json:"sun_inner"`
-		SunOuter            RGBColor `json:"sun_outer"`
-		Moon                RGBColor `json:"moon"`
-		MoonCrater          RGBColor `json:"moon_crater"`
-		Star                RGBColor `json:"star"`
-		CanvasBackground    RGBColor `json:"canvas_background"`
-		RainbowColors       []RGBColor `json:"rainbow_colors"`
+		SkyDayDay        RGBColor   `json:"sky_day_day"`
+		SkyNight         RGBColor   `json:"sky_night"`
+		SkySunset        RGBColor   `json:"sky_sunset"`
+		GroundGreen1     RGBColor   `json:"ground_green_1"`
+		GroundGreen2     RGBColor   `json:"ground_green_2"`
+		GroundSnow1      RGBColor   `json:"ground_snow_1"`
+		GroundSnow2      RGBColor   `json:"ground_snow_2"`
+		GroundDesert1    RGBColor   `json:"ground_desert_1"`
+		GroundDesert2    RGBColor   `json:"ground_desert_2"`
+		GroundStorm1     RGBColor   `json:"ground_storm_1"`
+		GroundStorm2     RGBColor   `json:"ground_storm_2"`
+		CloudWhite       RGBColor   `json:"cloud_white"`
+		CloudLightGray   RGBColor   `json:"cloud_light_gray"`
+		CloudDarkGray    RGBColor   `json:"cloud_dark_gray"`
+		CloudStorm       RGBColor   `json:"cloud_storm"`
+		RainDrop         RGBColor   `json:"rain_drop"`
+		SnowDrop         RGBColor   `json:"snow_drop"`
+		Lightning        RGBColor   `json:"lightning"`
+		WindLine         RGBColor   `json:"wind_line"`
+		SunInner         RGBColor   `json:"sun_inner"`
+		SunOuter         RGBColor   `json:"sun_outer"`
+		Moon             RGBColor   `json:"moon"`
+		MoonCrater       RGBColor   `json:"moon_crater"`
+		Star             RGBColor   `json:"star"`
+		CanvasBackground RGBColor   `json:"canvas_background"`
+		RainbowColors    []RGBColor `json:"rainbow_colors"`
 	} `json:"colors"`
 	Verifications map[string]bool `json:"verifications"`
 	ThemeName     string          `json:"theme_name"`
@@ -114,10 +119,10 @@ var (
 	mainWindow *wui.Window
 
 	// header
-	searchEdit   *wui.EditLine
-	searchCombo  *wui.ComboBox
-	searchItems  []geocodingItem
-	btnGeo       *wui.Button
+	searchEdit  *wui.EditLine
+	searchCombo *wui.ComboBox
+	searchItems []geocodingItem
+	btnGeo      *wui.Button
 
 	// current weather
 	labelMainTemp  *wui.Label
@@ -146,13 +151,13 @@ var (
 	tempUnit            string  = "celsius"
 	weatherCache        *WeatherResponse
 	timezoneOffsetHours float64 = -4
-	
+
 	// Selected day data (for viewing past/future days)
 	selectedDayData    *DailyDayData
 	selectedHourlyData []HourlyData
 	selectedDate       string
 	selectedHourData   *HourlyData
-	
+
 	// logging
 	logFile *os.File
 	logger  *log.Logger
@@ -173,6 +178,12 @@ var (
 	// themes
 	themeCombo *wui.ComboBox
 	themeItems []string
+
+	// date search
+	dateSearchEdit *wui.EditLine
+	btnDateSearch  *wui.Button
+	extraDailyData []DailyDayData
+	extraHourlyData map[string][]HourlyData
 )
 
 type geocodingItem struct {
@@ -184,11 +195,11 @@ type geocodingItem struct {
 }
 
 type DailyDayData struct {
-	Date            time.Time
-	TemperatureMax  float64
-	TemperatureMin  float64
+	Date             time.Time
+	TemperatureMax   float64
+	TemperatureMin   float64
 	PrecipitationMax float64
-	WeatherCode     int
+	WeatherCode      int
 }
 
 type HourlyData struct {
@@ -196,9 +207,12 @@ type HourlyData struct {
 	Temperature2m      float64
 	WeatherCode        int
 	PrecipitationProb  float64
+	Precipitation      float64 // NEW
 	CloudCover         float64
 	RelativeHumidity2m float64
 	WindSpeed10m       float64
+	Visibility         float64 // NEW
+	DirectRadiation    float64 // NEW
 }
 
 func initDefaultConfig() {
@@ -242,11 +256,11 @@ func loadConfig() {
 		initDefaultConfig()
 		return
 	}
-	
+
 	exeDir := filepath.Dir(exePath)
 	exeName := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
 	configPath = filepath.Join(exeDir, exeName+".json")
-	
+
 	file, err := os.Open(configPath)
 	if err != nil {
 		initDefaultConfig()
@@ -254,11 +268,11 @@ func loadConfig() {
 		return
 	}
 	defer file.Close()
-	
+
 	if err := json.NewDecoder(file).Decode(&appConfig); err != nil {
 		initDefaultConfig()
 	}
-	
+
 	if appConfig.Verifications == nil {
 		appConfig.Verifications = make(map[string]bool)
 	}
@@ -272,12 +286,12 @@ func saveConfig() {
 	if configPath == "" {
 		return
 	}
-	
+
 	data, err := json.MarshalIndent(appConfig, "", "  ")
 	if err != nil {
 		return
 	}
-	
+
 	os.WriteFile(configPath, data, 0644)
 }
 
@@ -293,23 +307,23 @@ func setupLogging() error {
 	if err != nil {
 		return err
 	}
-	
+
 	exeDir := filepath.Dir(exePath)
 	exeName := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
-	
+
 	logDir := filepath.Join(exeDir, exeName)
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return err
 	}
-	
+
 	today := time.Now().Format("2006-01-02")
 	logPath := filepath.Join(logDir, today+".log")
-	
+
 	logFile, err = os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
-	
+
 	logger = log.New(logFile, "", log.LstdFlags)
 	logger.Println("=== Weather App Started ===")
 	return nil
@@ -319,12 +333,12 @@ func logWeatherData(w *WeatherResponse, lat, lon float64, location string) {
 	if logger == nil {
 		return
 	}
-	
+
 	logger.Printf("Location: %s (%.4f, %.4f)", location, lat, lon)
 	if w != nil {
-		logger.Printf("Temperature: %.1f°C, Humidity: %.1f%%, Weather Code: %d", 
+		logger.Printf("Temperature: %.1f°C, Humidity: %.1f%%, Weather Code: %d",
 			w.Current.Temperature2m, w.Current.RelativeHumidity2m, w.Current.WeatherCode)
-		logger.Printf("Wind: %.1f km/h, Pressure: %.1f hPa, UV: %.1f", 
+		logger.Printf("Wind: %.1f km/h, Pressure: %.1f hPa, UV: %.1f",
 			w.Current.WindSpeed10m, w.Current.SurfacePressure, w.Current.UVIndex)
 	}
 	logger.Println("---")
@@ -383,16 +397,41 @@ func formatTemp(c float64) string {
 
 // Solar elevation in degrees given UTC date-time
 func getSolarElevationUTC(lat, lon float64, utc time.Time) float64 {
-	dayOfYear := float64(utc.YearDay())
-	declination := 23.44 * math.Sin((2*math.Pi/365)*(dayOfYear-81))
-	declRad := declination * math.Pi / 180
-	latRad := lat * math.Pi / 180
-	hourUTC := float64(utc.Hour()) + float64(utc.Minute())/60
-	solarNoonUTC := 12 - (lon / 15)
-	hourAngle := (hourUTC - solarNoonUTC) * 15 * math.Pi / 180
-	sinAlt := math.Sin(latRad)*math.Sin(declRad) + math.Cos(latRad)*math.Cos(declRad)*math.Cos(hourAngle)
-	return math.Asin(math.Max(-1, math.Min(1, sinAlt))) * 180 / math.Pi
+	// Calculate Julian Century
+	jd := float64(utc.Unix())/86400.0 + 2440587.5
+	jc := (jd - 2451545.0) / 36525.0
+
+	geomMeanLongSun := math.Mod(280.46646+jc*(36000.76983+jc*0.0003032), 360.0)
+	geomMeanAnomSun := 357.52911 + jc*(35999.05029-0.0001537*jc)
+	eccentEarthOrbit := 0.016708634 - jc*(0.000042037+0.0000001267*jc)
+
+	rad := math.Pi / 180.0
+	sunEqOfCtr := math.Sin(geomMeanAnomSun*rad)*(1.914602-jc*(0.004817+0.000014*jc)) +
+		math.Sin(2*geomMeanAnomSun*rad)*(0.019993-0.000101*jc) +
+		math.Sin(3*geomMeanAnomSun*rad)*0.000289
+
+	sunTrueLong := geomMeanLongSun + sunEqOfCtr
+	sunAppLong := sunTrueLong - 0.00569 - 0.00478*math.Sin((125.04-1934.136*jc)*rad)
+	meanObliqEcliptic := 23.439291 - jc*(0.0130042+jc*(0.00000016-jc*0.000000504))
+	obliqCorr := meanObliqEcliptic + 0.00256*math.Cos((125.04-1934.136*jc)*rad)
+
+	sunDeclin := math.Asin(math.Sin(obliqCorr*rad)*math.Sin(sunAppLong*rad)) * (180.0 / math.Pi)
+
+	y := math.Tan(obliqCorr/2*rad) * math.Tan(obliqCorr/2*rad)
+	eqOfTime := 4.0 * (y*math.Sin(2*geomMeanLongSun*rad) - 2*eccentEarthOrbit*math.Sin(geomMeanAnomSun*rad) +
+		4*eccentEarthOrbit*y*math.Sin(geomMeanAnomSun*rad)*math.Cos(2*geomMeanLongSun*rad) -
+		0.5*y*y*math.Sin(4*geomMeanLongSun*rad) - 1.25*eccentEarthOrbit*eccentEarthOrbit*math.Sin(2*geomMeanAnomSun*rad)) * (180.0 / math.Pi)
+
+	trueSolarTime := math.Mod(float64(utc.Hour()*60+utc.Minute()+utc.Second()/60)+eqOfTime+4.0*lon, 1440.0)
+	hourAngle := trueSolarTime/4.0 - 180.0
+	if hourAngle < -180 {
+		hourAngle += 360
+	}
+
+	sinAlt := math.Sin(lat*rad)*math.Sin(sunDeclin*rad) + math.Cos(lat*rad)*math.Cos(sunDeclin*rad)*math.Cos(hourAngle*rad)
+	return math.Asin(sinAlt) * (180.0 / math.Pi)
 }
+
 
 type rainbowPred struct {
 	Time       time.Time
@@ -404,72 +443,112 @@ type rainbowPred struct {
 func predictRainbow(hourlyData []HourlyData, lat, lon float64, tzOffsetHours float64, includePast bool) []rainbowPred {
 	var results []rainbowPred
 	now := time.Now()
-	
+
 	for i := 0; i < len(hourlyData) && i < 48; i++ {
 		localTime := hourlyData[i].Time
-		
-		// Skip future times if we only want past, or skip past if includePast is false
+
 		if !includePast && localTime.Before(now) {
 			continue
 		}
-		
+
 		utcTime := localTime.Add(-time.Duration(tzOffsetHours) * time.Hour)
 		sunElev := getSolarElevationUTC(lat, lon, utcTime)
-		
-		// Rainbows are physically impossible if the sun is below the horizon or above 42°
-		if sunElev <= 0 || sunElev >= 42 {
-			continue
-		}
 
-		precipProb := hourlyData[i].PrecipitationProb
-		cloud := hourlyData[i].CloudCover
+		// 1. STRICT PHYSICAL VETOS
+		if sunElev <= 0 || sunElev >= 42 {
+			continue // Rainbows physically impossible outside this sun angle
+		}
+		if hourlyData[i].Temperature2m <= 0 {
+			continue // Snow and ice crystals create halos, not rainbows
+		}
+		
+		code := hourlyData[i].WeatherCode
+		if (code >= 71 && code <= 77) || (code >= 85 && code <= 86) {
+			continue // Snowing
+		}
 
 		score := 0.0
 
-		// 1. Sun Elevation Score (Max 30)
-		if sunElev > 5 && sunElev < 35 {
-			score += 30.0 - math.Abs(sunElev-20)*0.5 // peaks near 20 degrees
+		// 2. SUN ANGLE SCORE (Max 25) - Highest intensity is around 10°-30°
+		if sunElev >= 10 && sunElev <= 30 {
+			score += 25.0
+		} else if sunElev > 0 && sunElev < 10 {
+			score += 15.0 + sunElev // Scales smoothly up to 25
 		} else {
-			score += 15.0
+			score += 25.0 - ((sunElev - 30) * 1.5) // Degrades as it approaches 42°
 		}
 
-		// 2. Precipitation Score (Max 40)
-		if precipProb >= 30 && precipProb <= 70 {
-			score += 40.0
-		} else if precipProb > 70 {
-			score += 30.0
-		} else {
-			score += precipProb * 0.5
+		// 3. PRECIPITATION VOLUME SCORE (Max 25) - We need liquid water in the air
+		precip := hourlyData[i].Precipitation
+		precipProb := hourlyData[i].PrecipitationProb
+		
+		if precip >= 0.1 && precip <= 5.0 {
+			score += 25.0 // Ideal, steady rain
+		} else if precip > 5.0 {
+			score += 15.0 // Torrential downpours often lack the breaks needed for sunlight
+		} else if precipProb > 30 {
+			score += 10.0 // No recorded volume, but high probability (virga or nearby showers)
 		}
 
-		// 3. Cloud Cover Score (Max 30)
-		if cloud >= 30 && cloud <= 70 {
-			score += 30.0
-		} else if cloud > 70 && cloud < 90 {
-			score += 15.0
-		} else if cloud >= 90 {
-			score += 0.0
+		// 4. DIRECT SUNLIGHT SCORE (Max 30) - Overrides generic cloud cover
+		radiation := hourlyData[i].DirectRadiation
+		cloud := hourlyData[i].CloudCover
+		
+		if radiation > 100 {
+			score += 30.0 // Bright, direct sun hitting the raindrops
+		} else if radiation > 20 {
+			score += 15.0 // Partial sun
 		} else {
-			score += cloud * 0.5
+			// Fallback to cloud cover if radiation is extremely low
+			if cloud >= 30 && cloud <= 70 {
+				score += 10.0 // Partly cloudy chance
+			} else if cloud < 30 {
+				score += 5.0 // Too clear, might not be enough rain clouds nearby
+			}
 		}
 
-		// Strict Multipliers (Penalties for impossible combinations)
-		if cloud > 95 {
-			score *= 0.1 // Sun is completely blocked
+		// 5. VISIBILITY SCORE (Max 10) - Rainbows require long lines of sight
+		vis := hourlyData[i].Visibility
+		if vis > 10000 {
+			score += 10.0 // Clear air (> 10km)
+		} else if vis > 5000 {
+			score += 5.0
 		}
-		if precipProb < 10 {
-			score *= 0.1 // Not enough moisture
+
+		// 6. ATMOSPHERIC STABILITY (Max 10)
+		wind := hourlyData[i].WindSpeed10m
+		if wind < 15 {
+			score += 5.0 // Low wind maintains perfect spherical droplets for refraction
 		}
-		if hourlyData[i].Temperature2m < 0 {
-			score *= 0.0 // Snow instead of rain
+		humidity := hourlyData[i].RelativeHumidity2m
+		if humidity > 65 {
+			score += 5.0 // High humidity slows droplet evaporation
+		}
+		
+		// fmt.Println(cloud, precip, vis)
+
+		// --- SEVERE PENALTIES ---
+		if cloud > 95 && radiation < 50 {
+			score *= 0.1 // Heavy overcast completely blocks the sun
+		}
+		if precip == 0 && precipProb < 10 {
+			score *= 0.0 // No moisture in the air
+		}
+		if vis < 2000 || code == 45 || code == 48 {
+			score *= 0.1 // Fog or dense mist completely obscures the optical effect
 		}
 
 		finalScore := int(math.Min(98, math.Round(score)))
 		if finalScore > 10 {
-			results = append(results, rainbowPred{localTime, finalScore, math.Round(sunElev), precipProb})
+			results = append(results, rainbowPred{
+				Time:       localTime,
+				Score:      finalScore,
+				SunElev:    math.Round(sunElev),
+				PrecipProb: precipProb,
+			})
 		}
 	}
-	
+
 	sort.Slice(results, func(i, j int) bool { return results[i].Score > results[j].Score })
 	return results
 }
@@ -479,22 +558,22 @@ func predictRainbow(hourlyData []HourlyData, lat, lon float64, tzOffsetHours flo
 // ---------------------------------------------------------------------
 func fetchWeatherAsync(lat, lon float64, callback func(*WeatherResponse, error)) {
 	go func() {
-		url := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,uv_index,dew_point_2m,surface_pressure&hourly=precipitation_probability,cloud_cover,temperature_2m,dew_point_2m,weather_code,relative_humidity_2m,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=auto&forecast_days=7&past_days=7",
+		url := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,uv_index,dew_point_2m,surface_pressure&hourly=precipitation_probability,precipitation,cloud_cover,temperature_2m,dew_point_2m,weather_code,relative_humidity_2m,wind_speed_10m,visibility,direct_radiation&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=auto&forecast_days=7&past_days=7",
 			lat, lon)
-		
+
 		resp, err := http.Get(url)
 		if err != nil {
 			callback(nil, err)
 			return
 		}
 		defer resp.Body.Close()
-		
+
 		var w WeatherResponse
 		if err := json.NewDecoder(resp.Body).Decode(&w); err != nil {
 			callback(nil, err)
 			return
 		}
-		
+
 		logWeatherData(&w, lat, lon, fmt.Sprintf("%.4f,%.4f", lat, lon))
 		callback(&w, nil)
 	}()
@@ -509,13 +588,13 @@ func searchCityAsync(q string, callback func([]geocodingItem, error)) {
 			return
 		}
 		defer resp.Body.Close()
-		
+
 		var res GeocodingResult
 		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 			callback(nil, err)
 			return
 		}
-		
+
 		items := make([]geocodingItem, len(res.Results))
 		for i, r := range res.Results {
 			items[i] = geocodingItem{r.Name, r.Latitude, r.Longitude, r.Country, r.Admin1}
@@ -532,7 +611,7 @@ func getUserLocationAsync(callback func(float64, float64, string, string, error)
 			return
 		}
 		defer resp.Body.Close()
-		
+
 		var data struct {
 			Lat     float64 `json:"lat"`
 			Lon     float64 `json:"lon"`
@@ -596,15 +675,25 @@ func extractDailyData(w *WeatherResponse) []DailyDayData {
 	if w == nil {
 		return nil
 	}
-	
+
 	var dailyData []DailyDayData
 	for i, t := range w.Daily.Time {
 		date, _ := time.Parse("2006-01-02", t)
+
+		precipMax := 0.0
+		if i < len(w.Daily.PrecipitationProbMax) {
+			precipMax = w.Daily.PrecipitationProbMax[i]
+		} else if i < len(w.Daily.PrecipitationSum) {
+			if w.Daily.PrecipitationSum[i] > 0 {
+				precipMax = 100
+			}
+		}
+
 		dailyData = append(dailyData, DailyDayData{
 			Date:             date,
 			TemperatureMax:   w.Daily.Temperature2mMax[i],
 			TemperatureMin:   w.Daily.Temperature2mMin[i],
-			PrecipitationMax: w.Daily.PrecipitationProbMax[i],
+			PrecipitationMax: precipMax,
 			WeatherCode:      w.Daily.WeatherCode[i],
 		})
 	}
@@ -615,25 +704,43 @@ func extractHourlyDataForDay(w *WeatherResponse, targetDate time.Time) []HourlyD
 	if w == nil {
 		return nil
 	}
-	
+
 	var hourlyData []HourlyData
 	targetDateStr := targetDate.Format("2006-01-02")
-	
+
 	for i, t := range w.Hourly.Time {
 		hourTime, err := time.Parse("2006-01-02T15:04", t)
 		if err != nil {
-			continue
+			hourTime, err = time.Parse("2006-01-02T15:04:05", t) // Try with seconds
+			if err != nil {
+				continue
+			}
 		}
-		
+
 		if hourTime.Format("2006-01-02") == targetDateStr {
+			precipProb := 0.0
+			if i < len(w.Hourly.PrecipitationProb) {
+				precipProb = w.Hourly.PrecipitationProb[i]
+			} else if i < len(w.Hourly.Precipitation) && w.Hourly.Precipitation[i] > 0 {
+				precipProb = 100
+			}
+
+			visibility := 10000.0
+			if i < len(w.Hourly.Visibility) {
+				visibility = w.Hourly.Visibility[i]
+			}
+
 			hourlyData = append(hourlyData, HourlyData{
 				Time:               hourTime,
 				Temperature2m:      w.Hourly.Temperature2m[i],
 				WeatherCode:        w.Hourly.WeatherCode[i],
-				PrecipitationProb:  w.Hourly.PrecipitationProb[i],
+				PrecipitationProb:  precipProb,
+				Precipitation:      w.Hourly.Precipitation[i],
 				CloudCover:         w.Hourly.CloudCover[i],
 				RelativeHumidity2m: w.Hourly.RelativeHumidity2m[i],
 				WindSpeed10m:       w.Hourly.WindSpeed10m[i],
+				Visibility:         visibility,
+				DirectRadiation:    w.Hourly.DirectRadiation[i],
 			})
 		}
 	}
@@ -668,7 +775,7 @@ func updateCurrentWeather() {
 		setLabelText(labelDesc, desc)
 		setLabelText(labelDate, time.Now().Format("Mon, Jan 2, 2006"))
 	}
-	
+
 	loc := locationName
 	if countryName != "" {
 		loc += ", " + countryName
@@ -680,18 +787,18 @@ func updateFeatures() {
 	if weatherCache == nil {
 		return
 	}
-	
+
 	// Use selected day's hourly data or current
 	var hourlyData []HourlyData
 	if selectedHourlyData != nil && len(selectedHourlyData) > 0 {
 		hourlyData = selectedHourlyData
 	} else {
-		hourlyData = extractHourlyDataForDay(weatherCache, time.Now())
+		hourlyData = getHourlyDataForDay(time.Now())
 	}
-	
+
 	c := weatherCache.Current
-	dailyData := extractDailyData(weatherCache)
-	
+	dailyData := getAllDailyData()
+
 	lat := weatherCache.Latitude
 	lon := weatherCache.Longitude
 	tzOff := float64(weatherCache.UTC_Offset_Seconds) / 3600
@@ -753,7 +860,7 @@ func updateHourlyTable() {
 	if weatherCache == nil || hourlyTable == nil {
 		return
 	}
-	
+
 	// Use selected day's hourly data or current day's data
 	var hourlyData []HourlyData
 	if selectedHourlyData != nil && len(selectedHourlyData) > 0 {
@@ -761,19 +868,19 @@ func updateHourlyTable() {
 	} else {
 		hourlyData = extractHourlyDataForDay(weatherCache, time.Now())
 	}
-	
+
 	tzOff := float64(weatherCache.UTC_Offset_Seconds) / 3600
 	lat := weatherCache.Latitude
 	lon := weatherCache.Longitude
-	
+
 	// Calculate rainbow predictions and sun angles
 	rainbowPreds := predictRainbow(hourlyData, lat, lon, tzOff, true)
-	
+
 	rainbowScores := make(map[int64]int)
 	for _, rp := range rainbowPreds {
 		rainbowScores[rp.Time.Unix()] = rp.Score
 	}
-	
+
 	// Pre-calculate sun angles for all hours
 	sunAngles := make(map[int64]float64)
 	for _, hour := range hourlyData {
@@ -786,30 +893,30 @@ func updateHourlyTable() {
 	if hourlyTable.RowCount() != len(hourlyData) {
 		hourlyTable.Clear()
 	}
-	
+
 	for i, hour := range hourlyData {
 		icon, _ := weatherInfo(hour.WeatherCode)
 		temp := formatTemp(hour.Temperature2m)
-		
+
 		// Get sun angle
 		sunAngle := sunAngles[hour.Time.Unix()]
 		sunAngleStr := fmt.Sprintf("%.1f°", sunAngle)
 
 		switch {
 		case sunAngle <= 0:
-			sunAngleStr = fmt.Sprintf("🌙 %.1f°", sunAngle)      // Night
+			sunAngleStr = fmt.Sprintf("🌙 %.1f°", sunAngle) // Night
 		case sunAngle < 8:
-			sunAngleStr = fmt.Sprintf("🌤️ %.1f°", sunAngle)     // Dawn/day but low angle
+			sunAngleStr = fmt.Sprintf("🌤️ %.1f°", sunAngle) // Dawn/day but low angle
 		default:
-			sunAngleStr = fmt.Sprintf("☀️ %.1f°", sunAngle)      // Full day
+			sunAngleStr = fmt.Sprintf("☀️ %.1f°", sunAngle) // Full day
 		}
-		
+
 		// Get rainbow score if applicable
 		rainStr := "-"
 		if score, exists := rainbowScores[hour.Time.Unix()]; exists {
 			rainStr = fmt.Sprintf("%d%% 🌈", score)
 		}
-		
+
 		ts := fmt.Sprintf("%d", hour.Time.Unix())
 		if appConfig.Verifications[ts] {
 			rainStr += " ✅"
@@ -823,49 +930,61 @@ func updateHourlyTable() {
 	}
 }
 
+func getAllDailyData() []DailyDayData {
+	if weatherCache == nil {
+		return extraDailyData
+	}
+	data := extractDailyData(weatherCache)
+	data = append(data, extraDailyData...)
+	sort.Slice(data, func(i, j int) bool {
+		return data[i].Date.Before(data[j].Date)
+	})
+	return data
+}
+
+func getHourlyDataForDay(d time.Time) []HourlyData {
+	dateStr := d.Format("2006-01-02")
+	if data, ok := extraHourlyData[dateStr]; ok {
+		return data
+	}
+	return extractHourlyDataForDay(weatherCache, d)
+}
+
 func updateDailyTable() {
-	if weatherCache == nil || dailyTable == nil {
+	if dailyTable == nil {
 		return
 	}
-	
-	dailyData := extractDailyData(weatherCache)
-	tzOff := float64(weatherCache.UTC_Offset_Seconds) / 3600
-	lat := weatherCache.Latitude
-	lon := weatherCache.Longitude
+
+	dailyData := getAllDailyData()
+	tzOff := timezoneOffsetHours
+	lat := currentLat
+	lon := currentLon
 
 	dailyTable.Clear()
 	now := time.Now()
-	
+
 	for _, day := range dailyData {
 		// 1. Get hourly data for THIS specific day
-		dayHourly := extractHourlyDataForDay(weatherCache, day.Date)
-		
+		dayHourly := getHourlyDataForDay(day.Date)
+
 		// 2. Predict rainbows for those 24 hours
-		// Set includePast to true so we get scores for the whole day
 		rainbows := predictRainbow(dayHourly, lat, lon, tzOff, true)
-		
+
 		rainbowStr := "-"
 		if len(rainbows) > 0 {
-			// predictRainbow returns results sorted by Score descending
-			// so the first element is the daily best.
 			rainbowStr = fmt.Sprintf("%d%% 🌈", rainbows[0].Score)
 		}
 
 		// UI formatting
 		var dayStr, dateStr string
-		isPast := day.Date.Before(now.AddDate(0, 0, -1))
 		isToday := day.Date.Format("2006-01-02") == now.Format("2006-01-02")
-		
+
+		dayStr = day.Date.Format("Mon")
 		if isToday {
 			dayStr = "Today"
-			dateStr = day.Date.Format("02/01/06")
-		} else if isPast {
-			dayStr = day.Date.Format("Mon")
-			dateStr = day.Date.Format("02/01/06")
-		} else {
-			dayStr = day.Date.Format("Mon")
-			dateStr = day.Date.Format("02/01/06")
 		}
+		dateStr = day.Date.Format("02/01/06")
+
 		icon, _ := weatherInfo(day.WeatherCode)
 		high := formatTemp(day.TemperatureMax)
 		low := formatTemp(day.TemperatureMin)
@@ -875,7 +994,7 @@ func updateDailyTable() {
 		dailyTable.SetCell(1, row, dayStr)
 		dailyTable.SetCell(2, row, icon)
 		dailyTable.SetCell(3, row, fmt.Sprintf("%s / %s", high, low))
-		dailyTable.SetCell(4, row, rainbowStr) // Now displays Rainbow score instead of Precip
+		dailyTable.SetCell(4, row, rainbowStr)
 	}
 }
 
@@ -884,15 +1003,15 @@ func onDailyTableSelection() {
 	if selectedRow < 0 || weatherCache == nil {
 		return
 	}
-	
-	dailyData := extractDailyData(weatherCache)
+
+	dailyData := getAllDailyData()
 	if selectedRow >= len(dailyData) {
 		return
 	}
-	
+
 	selectedDay := dailyData[selectedRow]
 	selectedDate = selectedDay.Date.Format("2006-01-02")
-	
+
 	// Check if selected day is today
 	todayStr := time.Now().Format("2006-01-02")
 	if selectedDate == todayStr {
@@ -903,11 +1022,11 @@ func onDailyTableSelection() {
 	} else {
 		// Load selected day's data
 		selectedDayData = &selectedDay
-		selectedHourlyData = extractHourlyDataForDay(weatherCache, selectedDay.Date)
+		selectedHourlyData = getHourlyDataForDay(selectedDay.Date)
 	}
-	
+
 	selectedHourData = nil
-	
+
 	// Update all displays
 	updateCurrentWeather()
 	updateFeatures()
@@ -919,25 +1038,25 @@ func onHourlyTableSelection() {
 	if selectedRow < 0 || weatherCache == nil {
 		return
 	}
-	
+
 	var hourlyData []HourlyData
 	if selectedHourlyData != nil && len(selectedHourlyData) > 0 {
 		hourlyData = selectedHourlyData
 	} else {
 		hourlyData = extractHourlyDataForDay(weatherCache, time.Now())
 	}
-	
+
 	if selectedRow >= len(hourlyData) {
 		return
 	}
-	
+
 	selectedHourData = &hourlyData[selectedRow]
-	
+
 	ts := fmt.Sprintf("%d", selectedHourData.Time.Unix())
 	if checkVerified != nil {
 		checkVerified.SetChecked(appConfig.Verifications[ts])
 	}
-	
+
 	if mainCanvas != nil {
 		mainCanvas.Paint()
 	}
@@ -968,14 +1087,14 @@ func onSearchEditChange() {
 		searchCombo.SetVisible(false)
 		return
 	}
-	
+
 	searchCityAsync(q, func(results []geocodingItem, err error) {
 		if err != nil {
 			searchItems = nil
 			searchCombo.SetVisible(false)
 			return
 		}
-		
+
 		searchItems = results
 		if len(results) > 0 {
 			updateSearchCombo()
@@ -990,99 +1109,103 @@ func onSearchEditChange() {
 }
 
 func onSearchComboChange(index int) {
-    if index < 0 || index >= len(searchItems) {
-        return
-    }
-    selected := searchItems[index]
-    searchItems = nil
-    updateSearchCombo()
-    searchCombo.SetVisible(false)
-    currentLat = selected.Lat
-    currentLon = selected.Lon
-    locationName = selected.Name
-    countryName = selected.Country
-    
-    // UPDATE: Set lat/lon input fields with the searched coordinates
-    if editLat != nil {
-        editLat.SetText(fmt.Sprintf("%.4f", currentLat))
-    }
-    if editLon != nil {
-        editLon.SetText(fmt.Sprintf("%.4f", currentLon))
-    }
-    
-    searchEdit.SetText(locationName + ", " + countryName)
-    
-    // Reset selected day when changing location
-    selectedDayData = nil
-    selectedHourlyData = nil
-    selectedDate = "today"
-    selectedHourData = nil
-    
-    updateData()
-}
-
-func onGeoClick() {
-    btnGeo.SetEnabled(false)
-    btnGeo.SetText("⏳")
-    
-    getUserLocationAsync(func(lat, lon float64, city, country string, err error) {
-        if err != nil {
-            lat, lon, city, country = 40.71, -74.00, "New York", "US"
-        }
-        currentLat = lat
-        currentLon = lon
-        locationName = city
-        countryName = country
-        
-        // UPDATE: Set lat/lon input fields with geo coordinates
-        if editLat != nil {
-            editLat.SetText(fmt.Sprintf("%.4f", currentLat))
-        }
-        if editLon != nil {
-            editLon.SetText(fmt.Sprintf("%.4f", currentLon))
-        }
-        
-        // Reset selected day when changing location
-        selectedDayData = nil
-        selectedHourlyData = nil
-        selectedDate = "today"
-        selectedHourData = nil
-        
-        updateData()
-        
-        btnGeo.SetEnabled(true)
-        btnGeo.SetText("📍")
-    })
-}
-
-func updateData() {
-	if labelLocation != nil {
-		labelLocation.SetText("Loading weather data...")
+	if index < 0 || index >= len(searchItems) {
+		return
 	}
-	
+	selected := searchItems[index]
+	searchItems = nil
+	updateSearchCombo()
+	searchCombo.SetVisible(false)
+	currentLat = selected.Lat
+	currentLon = selected.Lon
+	locationName = selected.Name
+	countryName = selected.Country
+
+	// UPDATE: Set lat/lon input fields with the searched coordinates
 	if editLat != nil {
 		editLat.SetText(fmt.Sprintf("%.4f", currentLat))
 	}
 	if editLon != nil {
 		editLon.SetText(fmt.Sprintf("%.4f", currentLon))
 	}
-	
+
+	searchEdit.SetText(locationName + ", " + countryName)
+
+	// Reset selected day when changing location
+	selectedDayData = nil
+	selectedHourlyData = nil
+	selectedDate = "today"
+	selectedHourData = nil
+
+	updateData()
+}
+
+func onGeoClick() {
+	btnGeo.SetEnabled(false)
+	btnGeo.SetText("⏳")
+
+	getUserLocationAsync(func(lat, lon float64, city, country string, err error) {
+		if err != nil {
+			lat, lon, city, country = 40.71, -74.00, "New York", "US"
+		}
+		currentLat = lat
+		currentLon = lon
+		locationName = city
+		countryName = country
+
+		// UPDATE: Set lat/lon input fields with geo coordinates
+		if editLat != nil {
+			editLat.SetText(fmt.Sprintf("%.4f", currentLat))
+		}
+		if editLon != nil {
+			editLon.SetText(fmt.Sprintf("%.4f", currentLon))
+		}
+
+		// Reset selected day when changing location
+		selectedDayData = nil
+		selectedHourlyData = nil
+		selectedDate = "today"
+		selectedHourData = nil
+
+		updateData()
+
+		btnGeo.SetEnabled(true)
+		btnGeo.SetText("📍")
+	})
+}
+
+func updateData() {
+	if labelLocation != nil {
+		labelLocation.SetText("Loading weather data...")
+	}
+
+	if editLat != nil {
+		editLat.SetText(fmt.Sprintf("%.4f", currentLat))
+	}
+	if editLon != nil {
+		editLon.SetText(fmt.Sprintf("%.4f", currentLon))
+	}
+
 	// Reset selected day when fetching new data
 	selectedDayData = nil
 	selectedHourlyData = nil
 	selectedDate = "today"
 	selectedHourData = nil
-	
+
+	// Clear extra searched dates when location changes or data is refreshed
+	extraDailyData = nil
+	extraHourlyData = make(map[string][]HourlyData)
+
 	fetchWeatherAsync(currentLat, currentLon, func(w *WeatherResponse, err error) {
 		if err == nil && w != nil {
 			weatherCache = w
 			timezoneOffsetHours = float64(w.UTC_Offset_Seconds) / 3600
-			
+
 			updateCurrentWeather()
 			updateFeatures()
 			updateHourlyTable()
 			updateDailyTable()
-			
+
 			logWeatherData(w, currentLat, currentLon, locationName+", "+countryName)
 		} else if err != nil {
 			if labelLocation != nil {
@@ -1096,8 +1219,8 @@ func updateData() {
 }
 
 func showRainbowFormula() {
-	
-text := `A rainbow requires three conditions:
+
+	text := `A rainbow requires three conditions:
    1. Sun behind you (angle 0°-42°)
    2. Rain in front of you
    3. Sunlight not completely blocked
@@ -1129,7 +1252,7 @@ SCALE:
    - 10-39% : Unlikely
    - <10%    : Not shown`
 
-		wui.MessageBox("Rainbow Formula Calculation", text)	
+	wui.MessageBox("Rainbow Formula Calculation", text)
 }
 
 func onColorCanvasPaint(c *wui.Canvas) {
@@ -1137,7 +1260,7 @@ func onColorCanvasPaint(c *wui.Canvas) {
 	for _, col := range appConfig.Colors.RainbowColors {
 		colors = append(colors, wuiColor(col))
 	}
-	
+
 	w, h := c.Size()
 	if len(colors) > 0 {
 		rectWidth := w / len(colors)
@@ -1150,17 +1273,17 @@ func onColorCanvasPaint(c *wui.Canvas) {
 
 func onMainCanvasPaint(c *wui.Canvas) {
 	w, h := c.Size()
-	
+
 	if weatherCache == nil {
 		c.FillRect(0, 0, w, h, wuiColor(appConfig.Colors.CanvasBackground))
-		c.TextOut(10, 10, "Loading...", wui.RGB(0,0,0))
+		c.TextOut(10, 10, "Loading...", wui.RGB(0, 0, 0))
 		return
 	}
-	
+
 	lat := weatherCache.Latitude
 	lon := weatherCache.Longitude
 	tzOff := float64(weatherCache.UTC_Offset_Seconds) / 3600
-	
+
 	var targetHour HourlyData
 	if selectedHourData != nil {
 		targetHour = *selectedHourData
@@ -1172,7 +1295,6 @@ func onMainCanvasPaint(c *wui.Canvas) {
 			hourlyData = extractHourlyDataForDay(weatherCache, time.Now())
 		}
 
-		// DEFAULT: Show current hour if it's today, otherwise show best rainbow
 		isToday := selectedDate == "today" || selectedDate == "" || (selectedDayData != nil && selectedDayData.Date.Format("2006-01-02") == time.Now().Format("2006-01-02"))
 
 		if isToday {
@@ -1208,17 +1330,16 @@ func onMainCanvasPaint(c *wui.Canvas) {
 			}
 		}
 	}
-	
+
 	cloudCover := targetHour.CloudCover
 	precipProb := targetHour.PrecipitationProb
 	temp := targetHour.Temperature2m
 	humidity := targetHour.RelativeHumidity2m
 	wind := targetHour.WindSpeed10m
 	code := targetHour.WeatherCode
-	
-	sunElev := getSolarElevationUTC(lat, lon, targetHour.Time.Add(-time.Duration(tzOff) * time.Hour))
-	
-	// --- NEW REALISTIC WEATHER CLASSIFICATION ---
+
+	sunElev := getSolarElevationUTC(lat, lon, targetHour.Time.Add(-time.Duration(tzOff)*time.Hour))
+
 	isFog := code == 45 || code == 48
 	isDrizzle := (code >= 51 && code <= 57)
 	isRain := (code >= 61 && code <= 67) || (code >= 80 && code <= 82)
@@ -1226,19 +1347,18 @@ func onMainCanvasPaint(c *wui.Canvas) {
 	isHail := code == 96 || code == 99
 	isThunderstorm := code >= 95
 	isPrecipitating := isDrizzle || isRain || isSnow || isHail
-	isBlizzard := isSnow && wind > 30 // Heavy wind + Snow
-	
+	isBlizzard := isSnow && wind > 30
+
 	rainbowScore := 0
 	hourlyDataArr := []HourlyData{targetHour}
 	preds := predictRainbow(hourlyDataArr, lat, lon, tzOff, true)
 	if len(preds) > 0 {
 		rainbowScore = preds[0].Score
 	}
-	
-	// --- GROUND COLORS ---
+
 	groundColor1 := wuiColor(appConfig.Colors.GroundGreen1)
 	groundColor2 := wuiColor(appConfig.Colors.GroundGreen2)
-	
+
 	if temp < 0 || isSnow {
 		groundColor1 = wuiColor(appConfig.Colors.GroundSnow1)
 		groundColor2 = wuiColor(appConfig.Colors.GroundSnow2)
@@ -1250,32 +1370,30 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		groundColor2 = wuiColor(appConfig.Colors.GroundStorm2)
 	}
 
-	// --- SKY COLORS ---
 	skyColor := appConfig.Colors.SkyDayDay
 	if sunElev < -5 {
 		skyColor = appConfig.Colors.SkyNight
 	} else if sunElev < 10 {
 		skyColor = appConfig.Colors.SkySunset
 	}
-	
-	cloudDarken := float64(cloudCover * 0.8) // Max darken scaling
+
+	cloudDarken := float64(cloudCover * 0.8)
 	if isThunderstorm || isBlizzard {
-		cloudDarken = 100 // Heavily darken sky for severe weather
+		cloudDarken = 100
 	}
-	
+
 	skyR := math.Max(0, float64(skyColor[0])-cloudDarken)
 	skyG := math.Max(0, float64(skyColor[1])-cloudDarken)
 	skyB := math.Max(0, float64(skyColor[2])-cloudDarken)
-	
+
 	if isThunderstorm && (animFrame%30 == 0 || animFrame%30 == 1) {
-		skyR, skyG, skyB = 255, 255, 255 // Lightning flash triggers sky flash
+		skyR, skyG, skyB = 255, 255, 255
 	}
 
 	horizonR := math.Min(255, skyR+50)
 	horizonG := math.Min(255, skyG+50)
 	horizonB := math.Min(255, skyB+50)
 
-	// Draw Vertical Gradient Sky
 	for y := 0; y < h; y += 4 {
 		ratio := float64(y) / float64(h)
 		r := uint8(skyR*(1-ratio) + horizonR*ratio)
@@ -1283,8 +1401,7 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		b := uint8(skyB*(1-ratio) + horizonB*ratio)
 		c.FillRect(0, y, w, 4, wui.RGB(r, g, b))
 	}
-	
-	// --- STARS ---
+
 	if sunElev < -5 && cloudCover < 50 && !isFog {
 		starColor := wuiColor(appConfig.Colors.Star)
 		c.FillRect(20, 20, 2, 2, starColor)
@@ -1292,14 +1409,17 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		c.FillRect(200, 15, 2, 2, starColor)
 		c.FillRect(350, 40, 2, 2, starColor)
 	}
-	
-	// --- SUN / MOON ---
-	if !isBlizzard { // Blizzards fully obscure celestial bodies
+
+	if !isBlizzard {
 		sunX := 40
-		sunY := h - 40 - int(sunElev*2) // Map elevation
-		if sunY > h { sunY = h }
-		if sunY < 20 { sunY = 20 }
-		
+		sunY := h - 40 - int(sunElev*2)
+		if sunY > h {
+			sunY = h
+		}
+		if sunY < 20 {
+			sunY = 20
+		}
+
 		if sunElev >= -5 {
 			pulse := int(math.Sin(float64(animFrame)*0.2) * 5)
 			c.FillEllipse(sunX-5-pulse, sunY-5-pulse, 50+pulse*2, 50+pulse*2, wuiColor(appConfig.Colors.SunOuter))
@@ -1311,41 +1431,52 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		}
 	}
 
-	// --- CLOUDS ---
 	if cloudCover > 10 {
 		cloudColor := wuiColor(appConfig.Colors.CloudWhite)
-		if cloudCover > 50 { cloudColor = wuiColor(appConfig.Colors.CloudLightGray) }
-		if cloudCover > 80 { cloudColor = wuiColor(appConfig.Colors.CloudDarkGray) }
-		if isThunderstorm || isBlizzard { cloudColor = wuiColor(appConfig.Colors.CloudStorm) }
-		
+		if cloudCover > 50 {
+			cloudColor = wuiColor(appConfig.Colors.CloudLightGray)
+		}
+		if cloudCover > 80 {
+			cloudColor = wuiColor(appConfig.Colors.CloudDarkGray)
+		}
+		if isThunderstorm || isBlizzard {
+			cloudColor = wuiColor(appConfig.Colors.CloudStorm)
+		}
+
 		numClouds := int(cloudCover / 10)
-		if isBlizzard { numClouds = 10 } // Force heavy cloud cover for blizzard
-		
+		if isBlizzard {
+			numClouds = 10
+		}
+
 		for i := 0; i < numClouds; i++ {
 			speed := float64(i%3+1) * 0.5
-			if wind > 20 { speed *= 2 } // Clouds move faster in wind
+			if wind > 20 {
+				speed *= 2
+			}
 			offset := int(float64(animFrame) * speed)
-			cx := (i * 45 + offset) % (w + 100) - 50
+			cx := (i*45+offset)%(w+100) - 50
 			cy := 10 + (i*10)%40
-			
+
 			c.FillEllipse(cx, cy, 70, 35, cloudColor)
 			c.FillEllipse(cx+15, cy-15, 60, 45, cloudColor)
 			c.FillEllipse(cx-10, cy-5, 50, 40, cloudColor)
 		}
 	}
-	
+
 	// --- RAINBOW ---
 	if rainbowScore > 10 && sunElev > 0 {
 		rainbowColors := []wui.Color{}
 		for _, col := range appConfig.Colors.RainbowColors {
 			rainbowColors = append(rainbowColors, wuiColor(col))
 		}
-		
-		cx := w / 2 + 50
+
+		cx := w/2 + 50
 		cy := h - 20
 		radius := 110 + int(sunElev)
-		if radius > w/2 { radius = w/2 }
-		
+		if radius > w/2 {
+			radius = w / 2
+		}
+
 		for i, col := range rainbowColors {
 			r := radius - (i * 5)
 			c.Arc(cx-r, cy-r, r*2, r*2, 270, 180, col)
@@ -1355,105 +1486,114 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		}
 	}
 
-	// --- GROUND ---
+
 	c.FillEllipse(-50, h-40, w/2+100, 100, groundColor1)
 	c.FillEllipse(w/2-50, h-60, w/2+100, 150, groundColor2)
 
-	// --- FOG ---
 	if isFog {
 		fogColor := wuiColor(appConfig.Colors.CloudLightGray)
 		for i := 0; i < 6; i++ {
 			drift := int(float64(animFrame) * 0.5)
-			cx := (i * 70 + drift) % (w + 150) - 75
+			cx := (i*70+drift)%(w+150) - 75
 			cy := h - 70 + (i*10)%30
 			c.FillEllipse(cx, cy, 180, 50, fogColor)
 		}
 	}
 
-	// --- PRECIPITATION (Rain, Snow, Hail, Drizzle) ---
-	windOffset := int(wind / 3) // Dynamic horizontal drift based on wind speed
-	
+	windOffset := int(wind / 3)
+
 	if isPrecipitating {
 		dropColor := wuiColor(appConfig.Colors.RainDrop)
 		numDrops := 40
-		
-		// Map intensity based on strict WMO codes
+
 		if isDrizzle {
 			numDrops = 20
-			dropColor = wuiColor(appConfig.Colors.CloudLightGray) // Fine, light mist
+			dropColor = wuiColor(appConfig.Colors.CloudLightGray)
 		} else if isRain {
-			if code == 65 || code == 82 { numDrops = 150 } // Heavy rain
+			if code == 65 || code == 82 {
+				numDrops = 150
+			}
 		} else if isSnow {
 			dropColor = wuiColor(appConfig.Colors.SnowDrop)
 			numDrops = 80
-			if code == 75 || code == 86 { numDrops = 200 } // Heavy snow
-			if isBlizzard { numDrops = 350 } // Blizzard whiteout conditions
+			if code == 75 || code == 86 {
+				numDrops = 200
+			}
+			if isBlizzard {
+				numDrops = 350
+			}
 		} else if isHail {
 			dropColor = wuiColor(appConfig.Colors.SnowDrop)
 			numDrops = 60
 		}
 
 		for i := 0; i < numDrops; i++ {
-			x := (i * 67) % w // Pseudo-random spread
-			
+			x := (i * 67) % w
+
 			if isSnow {
 				fallSpeed := (i%2 + 1) * 2
-				if isBlizzard { fallSpeed = (i%3 + 3) * 3 } // Faster lateral movement in storms
-				
+				if isBlizzard {
+					fallSpeed = (i%3 + 3) * 3
+				}
+
 				y := (i*17 + int(animFrame)*fallSpeed) % h
-				
-				// Apply sine wave drift for snow fluttering + standard wind
 				drift := int(math.Sin(float64(animFrame)*0.05+float64(i))*10) + int(wind)
 				x = (x + drift + w) % w
-				
-				flakeSize := (i%2) + 2
-				if isBlizzard { flakeSize = 1 + (i%2) } // Smaller, violently blowing chunks
-				
+
+				flakeSize := (i % 2) + 2
+				if isBlizzard {
+					flakeSize = 1 + (i % 2)
+				}
 				c.FillRect(x, y, flakeSize, flakeSize, dropColor)
-				
+
 			} else if isHail {
 				fallSpeed := (i%2 + 4) * 5
 				y := (i*17 + int(animFrame)*fallSpeed) % h
 				x = (x + windOffset + w) % w
-				
-				c.FillEllipse(x, y, 4, 4, dropColor) // Round hail pellets
-				
+				c.FillEllipse(x, y, 4, 4, dropColor)
+
 			} else {
-				// Rain & Drizzle Logic
 				fallSpeed := (i%3 + 3) * 5
 				length := fallSpeed
-				
-				if isDrizzle { 
+
+				if isDrizzle {
 					fallSpeed = (i%2 + 1) * 3
 					length = 3
 				}
-				if code == 65 || code == 82 { fallSpeed += 5 } // Heavy rain falls faster
-				
+				if code == 65 || code == 82 {
+					fallSpeed += 5
+				}
+
 				y := (i*23 + int(animFrame)*fallSpeed) % h
 				x = (x + windOffset + w) % w
-				
-				c.Line(x, y, x-windOffset, y+length, dropColor)
+
+				// --- COLLISION PHYSICS: Ground Splashes ---
+				splashY := h - 30 + (i % 15) // Dynamic ground depth
+				if y+length >= splashY {
+					// Draw tiny V-shape water splash
+					c.Line(x, splashY, x-3, splashY-4, wuiColor(appConfig.Colors.CloudLightGray))
+					c.Line(x, splashY, x+2, splashY-3, wuiColor(appConfig.Colors.CloudLightGray))
+				} else {
+					c.Line(x, y, x-windOffset, y+length, dropColor)
+				}
 			}
 		}
 	}
-	
-	// --- THUNDERSTORM / LIGHTNING ---
+
 	if isThunderstorm {
 		if animFrame%30 == 0 || animFrame%30 == 1 {
 			lightningColor := wuiColor(appConfig.Colors.Lightning)
-			lx := w/2 + (int(animFrame*7) % 100) - 50 // Randomize lightning strike position
+			lx := w/2 + (int(animFrame*7) % 100) - 50
 			c.Line(lx, 20, lx-15, 60, lightningColor)
 			c.Line(lx-15, 60, lx+10, 75, lightningColor)
 			c.Line(lx+10, 75, lx-30, h-40, lightningColor)
-			
-			// Secondary branches
+
 			if i := int(animFrame) % 2; i == 0 {
 				c.Line(lx-15, 60, lx-40, 80, lightningColor)
 			}
 		}
 	}
-	
-	// --- WIND DIRT/LINES (Visualizing high wind when clear) ---
+
 	if wind > 20 && !isSnow {
 		windColor := wuiColor(appConfig.Colors.WindLine)
 		offset1 := (int(animFrame) * int(wind/4)) % w
@@ -1461,18 +1601,102 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		c.Line(offset1, h-50, offset1+30, h-50, windColor)
 		c.Line((offset2+w/2)%w, h-80, (offset2+w/2)%w+40, h-80, windColor)
 	}
-	
-	// --- INFO OVERLAY ---
+
+	// --- POST-PROCESSING: Grunge / Film Grain ---
+	noiseBase := wui.RGB(20, 20, 25)
+	for i := 0; i < 300; i++ {
+		nx := (i*73 + int(animFrame)*13) % w
+		ny := (i*97 + int(animFrame)*29) % h
+		c.FillRect(nx, ny, 1, 1, noiseBase)
+	}
+
 	info := fmt.Sprintf("%s | Temp: %.1f° | Wind: %.1f | Rain Prob: %.0f%%", targetHour.Time.Format("Mon 15:04"), temp, wind, precipProb)
-	c.TextOut(5, c.Height() - 15, info, wui.RGB(255,255,255))
+	c.TextOut(5, c.Height()-15, info, wui.RGB(255, 255, 255))
+}
+
+func onDateSearchClick() {
+	text := dateSearchEdit.Text()
+	t, err := time.Parse("02-01-2006", text)
+	if err != nil {
+		wui.MessageBox("Error", "Invalid date format. Use dd-mm-yyyy")
+		return
+	}
+
+	dateStr := t.Format("2006-01-02")
+
+	// Check if already exists
+	allData := getAllDailyData()
+	for _, d := range allData {
+		if d.Date.Format("2006-01-02") == dateStr {
+			wui.MessageBox("Info", "Date already exists in table")
+			return
+		}
+	}
+
+	btnDateSearch.SetEnabled(false)
+	btnDateSearch.SetText("⏳")
+
+	go func() {
+		isHistorical := t.Before(time.Now().AddDate(0, 0, -80))
+		apiUrl := "https://api.open-meteo.com/v1/forecast"
+		dailyParams := "temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code"
+		hourlyParams := "precipitation_probability,precipitation,cloud_cover,temperature_2m,dew_point_2m,weather_code,relative_humidity_2m,wind_speed_10m,visibility,direct_radiation"
+
+		if isHistorical {
+			apiUrl = "https://archive-api.open-meteo.com/v1/archive"
+			dailyParams = "temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code"
+			hourlyParams = "precipitation,cloud_cover,temperature_2m,dew_point_2m,weather_code,relative_humidity_2m,wind_speed_10m,direct_radiation"
+		}
+
+		url := fmt.Sprintf("%s?latitude=%f&longitude=%f&start_date=%s&end_date=%s&daily=%s&hourly=%s&timezone=auto",
+			apiUrl, currentLat, currentLon, dateStr, dateStr, dailyParams, hourlyParams)
+
+		resp, err := http.Get(url)
+		if err != nil {
+			wui.MessageBox("Error", "Failed to fetch data: "+err.Error())
+			btnDateSearch.SetEnabled(true)
+			btnDateSearch.SetText("Add Date")
+			return
+		}
+		defer resp.Body.Close()
+
+		var w WeatherResponse
+		if err := json.NewDecoder(resp.Body).Decode(&w); err != nil {
+			wui.MessageBox("Error", "Failed to parse data")
+			btnDateSearch.SetEnabled(true)
+			btnDateSearch.SetText("Add Date")
+			return
+		}
+
+		if len(w.Daily.Time) > 0 {
+			dayDataList := extractDailyData(&w)
+			if len(dayDataList) > 0 {
+				dayData := dayDataList[0]
+				hourlyData := extractHourlyDataForDay(&w, t)
+
+				extraDailyData = append(extraDailyData, dayData)
+				if extraHourlyData == nil {
+					extraHourlyData = make(map[string][]HourlyData)
+				}
+				extraHourlyData[dateStr] = hourlyData
+				updateDailyTable()
+			}
+			btnDateSearch.SetEnabled(true)
+			btnDateSearch.SetText("Add Date")
+		} else {
+			wui.MessageBox("Error", "No data found for this date. (Dates very far in future may not be available)")
+			btnDateSearch.SetEnabled(true)
+			btnDateSearch.SetText("Add Date")
+		}
+	}()
 }
 
 func createUI() {
 	windowFont, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -11})
 	mainWindow = wui.NewWindow()
 	mainWindow.SetFont(windowFont)
-	
-	mainWindow.SetInnerSize(655, 425)
+
+	mainWindow.SetInnerSize(655, 440)
 	mainWindow.SetPosition(200, 70)
 	mainWindow.SetResizable(false)
 	mainWindow.SetHasMaxButton(false)
@@ -1572,14 +1796,14 @@ func createUI() {
 			locationName = fmt.Sprintf("%.2f, %.2f", lat, lon)
 			countryName = ""
 			searchEdit.SetText(locationName)
-			
+
 			reverseGeocodeAsync(lat, lon, func(name string, err error) {
 				if err == nil && name != "" {
 					locationName = name
 					searchEdit.SetText(name)
 				}
 			})
-			
+
 			selectedDayData = nil
 			selectedHourlyData = nil
 			selectedDate = "today"
@@ -1674,10 +1898,10 @@ func createUI() {
 		{"precip", "☂️", "Rain Prob", 10, 185},
 		{"cloud", "☁️", "Cloud Cover", 135, 185},
 	}
-	
+
 	for _, def := range cardDefs {
 		x, y0 := def.x, def.y0
-		
+
 		title := wui.NewLabel()
 		title.SetBounds(x, y0, 115, 14)
 		title.SetText(def.icon + " " + def.title)
@@ -1709,7 +1933,7 @@ func createUI() {
 		featureLabels[def.name+"Badge"] = badge
 		mainWindow.Add(badge)
 	}
-	
+
 	btnHelp := wui.NewButton()
 	btnHelp.SetBounds(110, 120, 14, 14)
 	font, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -10, Bold: false})
@@ -1727,7 +1951,7 @@ func createUI() {
 	fontTable, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -12, Bold: true})
 	labelHourly.SetFont(fontTable)
 	mainWindow.Add(labelHourly)
-	
+
 	checkVerified = wui.NewCheckBox()
 	checkVerified.SetBounds(140, 255, 120, 16)
 	checkVerified.SetText("Verified Rainbow")
@@ -1763,6 +1987,16 @@ func createUI() {
 	dailyTable.SetOnSelectionChange(onDailyTableSelection)
 	mainWindow.Add(dailyTable)
 
+	dateSearchEdit = wui.NewEditLine()
+	dateSearchEdit.SetBounds(330, 415, 100, 20)
+	dateSearchEdit.SetText(time.Now().Format("02-01-2006"))
+	mainWindow.Add(dateSearchEdit)
+
+	btnDateSearch = wui.NewButton()
+	btnDateSearch.SetBounds(435, 415, 80, 22)
+	btnDateSearch.SetText("Add Date")
+	btnDateSearch.SetOnClick(onDateSearchClick)
+	mainWindow.Add(btnDateSearch)
 
 	// labelCanvas := wui.NewLabel()
 	// labelCanvas.SetBounds(360, 60, 200, 16)
@@ -1823,6 +2057,7 @@ func createQuickUI() {
 	mainWindow.SetInnerSize(340, 240)
 	mainWindow.SetResizable(false)
 	mainWindow.SetHasMaxButton(false)
+	mainWindow.SetPosition(300, 70)
 	mainWindow.SetTitle("Rainbow Tool Quick")
 
 	labelMainTemp = wui.NewLabel()
@@ -1887,9 +2122,9 @@ func main() {
 	if err := setupLogging(); err != nil {
 		fmt.Printf("Warning: Could not setup logging: %v\n", err)
 	}
-	
+
 	createUI()
-	
+
 	go func() {
 		ticker := time.NewTicker(50 * time.Millisecond)
 		for range ticker.C {
@@ -1899,7 +2134,7 @@ func main() {
 			}
 		}
 	}()
-	
+
 	getUserLocationAsync(func(lat, lon float64, city, country string, err error) {
 		if err == nil {
 			currentLat = lat
@@ -1909,6 +2144,6 @@ func main() {
 		}
 		updateData()
 	})
-	
+
 	mainWindow.Show()
 }
