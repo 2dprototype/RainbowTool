@@ -1,2 +1,2 @@
-go build -o weather.exe -ldflags "-s -w -H=windowsgui"
+go build -o rainbowtool.exe -ldflags "-s -w -H=windowsgui"
 pause

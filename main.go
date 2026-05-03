@@ -2003,6 +2003,96 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 			c.Line(x1, ry1, x2, ry2, rainColor)
 		}
 		c.TextOut(5, 2, "Detailed: Cloud Cover (Gray) / Precipitation Prob (Blue)", wui.RGB(200, 200, 200))
+	case 4: // Wind Speed & Visibility
+		windColor := wui.RGB(150, 255, 150)
+		visColor := wui.RGB(200, 150, 255)
+		
+		maxWind := 1.0
+		for _, d := range hourlyData {
+			if d.WindSpeed10m > maxWind {
+				maxWind = d.WindSpeed10m
+			}
+		}
+
+		for i := 0; i < len(hourlyData)-1; i++ {
+			x1 := i * w / (len(hourlyData) - 1)
+			x2 := (i + 1) * w / (len(hourlyData) - 1)
+
+			wy1 := int(float64(h-20) - (hourlyData[i].WindSpeed10m/maxWind)*float64(h-20) + 10)
+			wy2 := int(float64(h-20) - (hourlyData[i+1].WindSpeed10m/maxWind)*float64(h-20) + 10)
+
+			// Visibility max is generally 24000m (24km)
+			vy1 := int(float64(h-20) - (hourlyData[i].Visibility/24000.0)*float64(h-20) + 10)
+			vy2 := int(float64(h-20) - (hourlyData[i+1].Visibility/24000.0)*float64(h-20) + 10)
+
+			c.Line(x1, wy1, x2, wy2, windColor)
+			c.Line(x1, vy1, x2, vy2, visColor)
+		}
+		c.TextOut(5, 2, "Wind Speed (Green) / Visibility (Purple)", wui.RGB(200, 200, 200))
+
+
+	case 5: // Super Advanced Rainbow Analysis
+		scoreColor := wui.RGB(255, 255, 0)
+		precipColor := wui.RGB(0, 150, 255)
+		radColor := wui.RGB(255, 100, 100)
+
+		rainbows := predictRainbow(hourlyData, lat, lon, tzOff, true)
+		scores := make(map[int]int)
+		for _, r := range rainbows {
+			scores[r.Time.Hour()] = r.Score
+		}
+
+		maxPrecip := 0.1 // prevent division by zero
+		maxRad := 1.0
+		for _, d := range hourlyData {
+			if d.Precipitation > maxPrecip {
+				maxPrecip = d.Precipitation
+			}
+			if d.DirectRadiation > maxRad {
+				maxRad = d.DirectRadiation
+			}
+		}
+
+		for i := 0; i < len(hourlyData)-1; i++ {
+			x1 := i * w / (len(hourlyData) - 1)
+			x2 := (i + 1) * w / (len(hourlyData) - 1)
+
+			// 1. Draw "Rainbow Window" background heat map based on score
+			s1 := float64(scores[hourlyData[i].Time.Hour()])
+			if s1 > 10 {
+				intensity := uint8((s1 / 100.0) * 80) // Max 80 alpha-equivalent
+				c.FillRect(x1, 10, x2-x1, h-20, wui.RGB(intensity, 0, intensity/2)) // Purple-ish backdrop
+			}
+
+			s2 := float64(scores[hourlyData[i+1].Time.Hour()])
+			sy1 := int(float64(h-20) - (s1/100.0)*float64(h-20) + 10)
+			sy2 := int(float64(h-20) - (s2/100.0)*float64(h-20) + 10)
+
+			utc1 := hourlyData[i].Time.Add(-time.Duration(tzOff) * time.Hour)
+			utc2 := hourlyData[i+1].Time.Add(-time.Duration(tzOff) * time.Hour)
+			e1 := getSolarElevationUTC(lat, lon, utc1)
+			e2 := getSolarElevationUTC(lat, lon, utc2)
+			
+			ey1 := int(float64(h-20) - (e1/90.0)*float64(h-20) + 10)
+			ey2 := int(float64(h-20) - (e2/90.0)*float64(h-20) + 10)
+
+			py1 := int(float64(h-20) - (hourlyData[i].Precipitation/maxPrecip)*float64(h-20) + 10)
+			py2 := int(float64(h-20) - (hourlyData[i+1].Precipitation/maxPrecip)*float64(h-20) + 10)
+
+			ry1 := int(float64(h-20) - (hourlyData[i].DirectRadiation/maxRad)*float64(h-20) + 10)
+			ry2 := int(float64(h-20) - (hourlyData[i+1].DirectRadiation/maxRad)*float64(h-20) + 10)
+
+			if ey1 > h { ey1 = h }
+			if ey2 > h { ey2 = h }
+
+			c.Line(x1, py1, x2, py2, precipColor)   // Actual Rain Volume (not just prob)
+			c.Line(x1, ry1, x2, ry2, radColor)      // Direct Sunlight Radiation
+			
+			// Draw Rainbow Probability Score slightly thicker
+			c.Line(x1, sy1, x2, sy2, scoreColor)
+			// c.Line(x1, sy1+1, x2, sy2+1, scoreColor)
+		}
+		c.TextOut(5, 2, "ADV: Score(Yel), Sun(Orng), RainVol(Blu), Rad(Red)", wui.RGB(255, 255, 255))
 	}
 }
 
@@ -2012,7 +2102,7 @@ func createUI() {
 	mainWindow.SetFont(windowFont)
 
 	mainWindow.SetInnerSize(960, 440)
-	mainWindow.SetPosition(200, 70)
+	mainWindow.SetPosition(20, 70)
 	mainWindow.SetResizable(false)
 	mainWindow.SetHasMaxButton(false)
 	mainWindow.SetTitle("Rainbow Tool")
@@ -2354,6 +2444,8 @@ func createUI() {
 	analysisCombo.AddItem("Rainbow Score Trend")
 	analysisCombo.AddItem("Sun Elevation Angle")
 	analysisCombo.AddItem("Cloud vs Precipitation")
+	analysisCombo.AddItem("Wind Speed & Visibility")
+	analysisCombo.AddItem("Advanced Rainbow Analysis")
 	analysisCombo.SetSelectedIndex(0)
 	analysisCombo.SetOnChange(func(index int) {
 		if analysisCanvas != nil {
