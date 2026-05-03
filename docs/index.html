@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌈 Rainbow Tool</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">🌈 Rainbow Tool</div>
+            <div class="coord-input">
+                <input type="text" id="editLat" placeholder="Lat" value="40.71">
+                <input type="text" id="editLon" placeholder="Lon" value="-74.00">
+                <button id="btnUpdateLoc">Go</button>
+            </div>
+            <div class="search-group">
+                <input type="text" id="searchEdit" placeholder="Search city...">
+                <button id="btnSearch">Search</button>
+                <button id="btnGeo">📍</button>
+                <div class="search-dropdown" id="searchDropdown"></div>
+            </div>
+            <select class="theme-select" id="themeCombo">
+                <option value="default">Default Theme</option>
+            </select>
+        </div>
+
+        <!-- Main Grid: Current Weather + Rainbow Canvas -->
+        <div class="main-grid">
+            <div class="current-weather">
+                <div class="weather-main">
+                    <div class="weather-icon" id="labelMainIcon">☀️</div>
+                    <div>
+                        <div class="temp" id="labelMainTemp">--°C</div>
+                        <div class="location" id="labelLocation">Loading...</div>
+                        <div class="date-display" id="labelDate"></div>
+                    </div>
+                </div>
+                <div class="feels-like" id="labelMainFeels">Feels --°C</div>
+                <div id="labelDesc" style="opacity: 0.8; margin-top: 5px;">--</div>
+                
+                <div class="feature-cards">
+                    <div class="feature-card">
+                        <div class="feature-title">🌈 Rainbow Prob</div>
+                        <div class="feature-value" id="valRainbow">--</div>
+                        <div class="feature-detail" id="valRainbowDetail"></div>
+                        <div class="feature-badge" id="valRainbowBadge"></div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-title">☀️ Sun Elevation <button class="help-btn" onclick="showHelpModal()">?</button></div>
+                        <div class="feature-value" id="valSun">--</div>
+                        <div class="feature-detail" id="valSunDetail"></div>
+                        <div class="feature-badge" id="valSunBadge"></div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-title">☂️ Rain Prob</div>
+                        <div class="feature-value" id="valPrecip">--</div>
+                        <div class="feature-detail" id="valPrecipDetail"></div>
+                        <div class="feature-badge" id="valPrecipBadge"></div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-title">☁️ Cloud Cover</div>
+                        <div class="feature-value" id="valCloud">--</div>
+                        <div class="feature-detail" id="valCloudDetail"></div>
+                        <div class="feature-badge" id="valCloudBadge"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rainbow-canvas-container">
+                <canvas id="mainCanvas" width="630" height="340"></canvas>
+                <div class="color-bar" id="colorBar">
+                    <div style="background:rgb(255,0,0)"></div>
+                    <div style="background:rgb(255,127,0)"></div>
+                    <div style="background:rgb(255,255,0)"></div>
+                    <div style="background:rgb(0,255,0)"></div>
+                    <div style="background:rgb(0,0,255)"></div>
+                    <div style="background:rgb(75,0,130)"></div>
+                    <div style="background:rgb(148,0,211)"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tables Section -->
+        <div class="tables-section">
+            <div class="table-container">
+                <div class="table-title">⌛ Hourly Forecast</div>
+                <div style="margin-bottom: 8px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85em;">
+                        <input type="checkbox" id="checkVerified">
+                        Verified Rainbow
+                    </label>
+                </div>
+                <div class="table-wrapper">
+                    <table id="hourlyTable">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Icon</th>
+                                <th>Temp</th>
+                                <th>Rainbow</th>
+                                <th>Sun Angle</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <div class="table-title">📅 14-Day Rainbow Forecast</div>
+                <div class="table-wrapper">
+                    <table id="dailyTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th>Icon</th>
+                                <th>High/Low</th>
+                                <th>Rainbow</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="date-search">
+                    <input type="text" id="dateSearchEdit" placeholder="dd-mm-yyyy">
+                    <button id="btnDateSearch">Add Date</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <div class="table-title">✅ Verified Rainbows</div>
+                <div class="table-wrapper">
+                    <table id="verifiedTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Location</th>
+                                <th>Lat</th>
+                                <th>Lon</th>
+                                <th>Icon</th>
+                                <th>Temp</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Section -->
+        <div class="analysis-section">
+            <div class="analysis-controls">
+                <select class="analysis-select" id="analysisCombo">
+                    <option value="0">Temperature & Rain %</option>
+                    <option value="1">Rainbow Score Trend</option>
+                    <option value="2">Sun Elevation Angle</option>
+                    <option value="3">Cloud vs Precipitation</option>
+                    <option value="4">Wind Speed & Visibility</option>
+                    <option value="5">Advanced Rainbow Analysis</option>
+                </select>
+            </div>
+            <div class="analysis-canvas-container">
+                <canvas id="analysisCanvas" width="1180" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div class="modal" id="helpModal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeHelpModal()">✕</span>
+            <pre style="white-space: pre-wrap; font-size: 0.85em; line-height: 1.5;">
+A rainbow requires three conditions:
+   1. Sun behind you (angle 0°-42°)
+   2. Rain in front of you
+   3. Sunlight not completely blocked
+
+SUN ELEVATION SCORE (max 30)
+   - Optimal range: 5°-35° (peaks at ~20°)
+   - Outside optimal: reduced score
+   - Sun below 0° or above 42° → impossible
+
+PRECIPITATION SCORE (max 40)
+   - 30-70% chance: full 40 points
+   - >70% chance: 30 points (too heavy blocks sun)
+   - <30% chance: scales linearly 0-20 points
+
+CLOUD COVER SCORE (max 30)
+   - 30-70% cover: full 30 points
+   - 70-90% cover: 15 points
+   - >90% cover: 0 points (sun blocked)
+   - <30% cover: scales linearly 0-15 points
+
+STRICT PENALTIES:
+   - Cloud cover >95% → score × 0.1
+   - Precipitation <10% → score × 0.1
+
+SCALE:
+   - 90-98% : Excellent chance
+   - 70-89% : Good chance
+   - 40-69% : Possible
+   - 10-39% : Unlikely
+   - <10%    : Not shown
+            </pre>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="main.js"></script>
+</body>
+</html>
