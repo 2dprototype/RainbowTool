@@ -77,6 +77,16 @@ type GeocodingResult struct {
 	} `json:"results"`
 }
 
+type VerificationData struct {
+	Timestamp string  `json:"timestamp"`
+	Date      string  `json:"date"`
+	Lat       float64 `json:"lat"`
+	Lon       float64 `json:"lon"`
+	Location  string  `json:"location"`
+	Temp      float64 `json:"temp"`
+	Icon      string  `json:"icon"`
+}
+
 type RGBColor [3]uint8
 
 type AppConfig struct {
@@ -108,8 +118,8 @@ type AppConfig struct {
 		CanvasBackground RGBColor   `json:"canvas_background"`
 		RainbowColors    []RGBColor `json:"rainbow_colors"`
 	} `json:"colors"`
-	Verifications map[string]bool `json:"verifications"`
-	ThemeName     string          `json:"theme_name"`
+	Verifications map[string]VerificationData `json:"verifications"`
+	ThemeName     string                     `json:"theme_name"`
 }
 
 // ---------------------------------------------------------------------
@@ -136,8 +146,9 @@ var (
 	featureLabels map[string]*wui.Label
 
 	// hourly & daily tables
-	hourlyTable *wui.StringTable
-	dailyTable  *wui.StringTable
+	hourlyTable   *wui.StringTable
+	dailyTable    *wui.StringTable
+	verifiedTable *wui.StringTable
 
 	// canvases
 	mainCanvas  *wui.PaintBox
@@ -180,10 +191,13 @@ var (
 	themeItems []string
 
 	// date search
-	dateSearchEdit *wui.EditLine
-	btnDateSearch  *wui.Button
-	extraDailyData []DailyDayData
+	dateSearchEdit  *wui.EditLine
+	btnDateSearch   *wui.Button
+	extraDailyData  []DailyDayData
 	extraHourlyData map[string][]HourlyData
+
+	// verified list for table
+	verifiedList []VerificationData
 )
 
 type geocodingItem struct {
@@ -217,7 +231,7 @@ type HourlyData struct {
 
 func initDefaultConfig() {
 	appConfig = AppConfig{
-		Verifications: make(map[string]bool),
+		Verifications: make(map[string]VerificationData),
 	}
 	appConfig.Colors.SkyDayDay = RGBColor{135, 206, 235}
 	appConfig.Colors.SkyNight = RGBColor{5, 5, 20}
@@ -270,11 +284,23 @@ func loadConfig() {
 	defer file.Close()
 
 	if err := json.NewDecoder(file).Decode(&appConfig); err != nil {
-		initDefaultConfig()
+		// Try migration from old bool map
+		file.Close()
+		file, _ = os.Open(configPath)
+		var oldConfig struct {
+			Verifications map[string]bool `json:"verifications"`
+		}
+		if err2 := json.NewDecoder(file).Decode(&oldConfig); err2 == nil {
+			initDefaultConfig()
+			// We can't easily migrate the full data, so we'll just keep them as empty entries or reset.
+			// Given the requirements, resetting is safer than having invalid data.
+		} else {
+			initDefaultConfig()
+		}
 	}
 
 	if appConfig.Verifications == nil {
-		appConfig.Verifications = make(map[string]bool)
+		appConfig.Verifications = make(map[string]VerificationData)
 	}
 	if len(appConfig.Colors.RainbowColors) == 0 {
 		initDefaultConfig()
@@ -918,7 +944,7 @@ func updateHourlyTable() {
 		}
 
 		ts := fmt.Sprintf("%d", hour.Time.Unix())
-		if appConfig.Verifications[ts] {
+		if _, exists := appConfig.Verifications[ts]; exists {
 			rainStr += " ✅"
 		}
 
@@ -1054,7 +1080,8 @@ func onHourlyTableSelection() {
 
 	ts := fmt.Sprintf("%d", selectedHourData.Time.Unix())
 	if checkVerified != nil {
-		checkVerified.SetChecked(appConfig.Verifications[ts])
+		_, exists := appConfig.Verifications[ts]
+		checkVerified.SetChecked(exists)
 	}
 
 	if mainCanvas != nil {
@@ -1205,6 +1232,7 @@ func updateData() {
 			updateFeatures()
 			updateHourlyTable()
 			updateDailyTable()
+			updateVerifiedTable()
 
 			logWeatherData(w, currentLat, currentLon, locationName+", "+countryName)
 		} else if err != nil {
@@ -1680,6 +1708,7 @@ func onDateSearchClick() {
 				}
 				extraHourlyData[dateStr] = hourlyData
 				updateDailyTable()
+				updateVerifiedTable()
 			}
 			btnDateSearch.SetEnabled(true)
 			btnDateSearch.SetText("Add Date")
@@ -1691,12 +1720,136 @@ func onDateSearchClick() {
 	}()
 }
 
+func updateVerifiedTable() {
+	if verifiedTable == nil {
+		return
+	}
+	verifiedTable.Clear()
+
+	verifiedList = nil
+	for _, v := range appConfig.Verifications {
+		verifiedList = append(verifiedList, v)
+	}
+	sort.Slice(verifiedList, func(i, j int) bool {
+		return verifiedList[i].Timestamp > verifiedList[j].Timestamp
+	})
+
+	for _, v := range verifiedList {
+		row := verifiedTable.RowCount()
+		verifiedTable.SetCell(0, row, v.Date)
+		verifiedTable.SetCell(1, row, v.Location)
+		verifiedTable.SetCell(2, row, fmt.Sprintf("%.2f", v.Lat))
+		verifiedTable.SetCell(3, row, fmt.Sprintf("%.2f", v.Lon))
+		verifiedTable.SetCell(4, row, v.Icon)
+		verifiedTable.SetCell(5, row, fmt.Sprintf("%.1f", v.Temp))
+	}
+}
+
+func onVerifiedTableSelection() {
+	selectedRow := verifiedTable.SelectedRow()
+	if selectedRow < 0 || selectedRow >= len(verifiedList) {
+		return
+	}
+
+	v := verifiedList[selectedRow]
+	t, err := time.Parse("02-01-2006 15:04", v.Date)
+	if err != nil {
+		return
+	}
+
+	currentLat = v.Lat
+	currentLon = v.Lon
+	locationName = v.Location
+	if editLat != nil {
+		editLat.SetText(fmt.Sprintf("%.4f", currentLat))
+	}
+	if editLon != nil {
+		editLon.SetText(fmt.Sprintf("%.4f", currentLon))
+	}
+
+	selectedDate = t.Format("2006-01-02")
+	dateStr := selectedDate
+
+	// Fetch weather for this date/location if not matching current cache
+	if weatherCache != nil && math.Abs(weatherCache.Latitude-v.Lat) < 0.01 && math.Abs(weatherCache.Longitude-v.Lon) < 0.01 {
+		// Just find the hour
+		selectedDayData = nil
+		daily := extractDailyData(weatherCache)
+		for _, d := range daily {
+			if d.Date.Format("2006-01-02") == dateStr {
+				selectedDayData = &d
+				break
+			}
+		}
+		selectedHourlyData = extractHourlyDataForDay(weatherCache, t)
+		// find specific hour
+		for i := range selectedHourlyData {
+			if selectedHourlyData[i].Time.Hour() == t.Hour() {
+				selectedHourData = &selectedHourlyData[i]
+				break
+			}
+		}
+		updateCurrentWeather()
+		updateFeatures()
+		updateHourlyTable()
+	} else {
+		// Need to fetch
+		isHistorical := t.Before(time.Now().AddDate(0, 0, -80))
+		apiUrl := "https://api.open-meteo.com/v1/forecast"
+		dailyParams := "temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code"
+		hourlyParams := "precipitation_probability,precipitation,cloud_cover,temperature_2m,dew_point_2m,weather_code,relative_humidity_2m,wind_speed_10m,visibility,direct_radiation"
+
+		if isHistorical {
+			apiUrl = "https://archive-api.open-meteo.com/v1/archive"
+			dailyParams = "temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code"
+			hourlyParams = "precipitation,cloud_cover,temperature_2m,dew_point_2m,weather_code,relative_humidity_2m,wind_speed_10m,direct_radiation"
+		}
+
+		url := fmt.Sprintf("%s?latitude=%f&longitude=%f&start_date=%s&end_date=%s&daily=%s&hourly=%s&timezone=auto",
+			apiUrl, currentLat, currentLon, dateStr, dateStr, dailyParams, hourlyParams)
+
+		go func() {
+			resp, err := http.Get(url)
+			if err != nil {
+				return
+			}
+			defer resp.Body.Close()
+
+			var w WeatherResponse
+			if err := json.NewDecoder(resp.Body).Decode(&w); err != nil {
+				return
+			}
+
+			weatherCache = &w
+			timezoneOffsetHours = float64(w.UTC_Offset_Seconds) / 3600
+
+			selectedDayData = nil
+			daily := extractDailyData(&w)
+			if len(daily) > 0 {
+				selectedDayData = &daily[0]
+			}
+			selectedHourlyData = extractHourlyDataForDay(&w, t)
+			for i := range selectedHourlyData {
+				if selectedHourlyData[i].Time.Hour() == t.Hour() {
+					selectedHourData = &selectedHourlyData[i]
+					break
+				}
+			}
+
+			updateCurrentWeather()
+			updateFeatures()
+			updateHourlyTable()
+			updateDailyTable()
+		}()
+	}
+}
+
 func createUI() {
 	windowFont, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -11})
 	mainWindow = wui.NewWindow()
 	mainWindow.SetFont(windowFont)
 
-	mainWindow.SetInnerSize(655, 440)
+	mainWindow.SetInnerSize(960, 440)
 	mainWindow.SetPosition(200, 70)
 	mainWindow.SetResizable(false)
 	mainWindow.SetHasMaxButton(false)
@@ -1959,12 +2112,22 @@ func createUI() {
 		if selectedHourData != nil {
 			ts := fmt.Sprintf("%d", selectedHourData.Time.Unix())
 			if checked {
-				appConfig.Verifications[ts] = true
+				icon, _ := weatherInfo(selectedHourData.WeatherCode)
+				appConfig.Verifications[ts] = VerificationData{
+					Timestamp: ts,
+					Date:      selectedHourData.Time.Format("02-01-2006 15:04"),
+					Lat:       currentLat,
+					Lon:       currentLon,
+					Location:  locationName,
+					Temp:      selectedHourData.Temperature2m,
+					Icon:      icon,
+				}
 			} else {
 				delete(appConfig.Verifications, ts)
 			}
 			saveConfig()
 			updateHourlyTable()
+			updateVerifiedTable()
 		}
 	})
 	mainWindow.Add(checkVerified)
@@ -1997,6 +2160,19 @@ func createUI() {
 	btnDateSearch.SetText("Add Date")
 	btnDateSearch.SetOnClick(onDateSearchClick)
 	mainWindow.Add(btnDateSearch)
+
+	// Verified Rainbows table
+	labelVerified := wui.NewLabel()
+	labelVerified.SetBounds(655, 255, 180, 16)
+	labelVerified.SetText("✅ Verified Rainbows")
+	labelVerified.SetFont(fontTable)
+	mainWindow.Add(labelVerified)
+
+	verifiedTable = wui.NewStringTable("📅 Date", "📍 Location", "Lat", "Lon", "Icon", "Temp")
+	verifiedTable.SetBounds(655, 275, 295, 135)
+	verifiedTable.SetOnSelectionChange(onVerifiedTableSelection)
+	mainWindow.Add(verifiedTable)
+	updateVerifiedTable()
 
 	// labelCanvas := wui.NewLabel()
 	// labelCanvas.SetBounds(360, 60, 200, 16)
