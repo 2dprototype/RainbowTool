@@ -77,13 +77,16 @@ type GeocodingResult struct {
 }
 
 type VerificationData struct {
-	Timestamp string  `json:"timestamp"`
-	Date      string  `json:"date"`
-	Lat       float64 `json:"lat"`
-	Lon       float64 `json:"lon"`
-	Location  string  `json:"location"`
-	Temp      float64 `json:"temp"`
-	Icon      string  `json:"icon"`
+	Timestamp   string  `json:"timestamp"`
+	Date        string  `json:"date"`
+	Lat         float64 `json:"lat"`
+	Lon         float64 `json:"lon"`
+	Location    string  `json:"location"`
+	Temp        float64 `json:"temp"`
+	Icon        string  `json:"icon"`
+	Comment     string  `json:"comment"`
+	Source      string  `json:"source"`
+	Description string  `json:"description"`
 }
 
 type RGBColor [3]uint8
@@ -1731,6 +1734,177 @@ func onDateSearchClick() {
 	}()
 }
 
+func showVerificationInputDialog(ts string, v VerificationData) {
+	inputWindow := wui.NewWindow()
+	inputWindow.SetTitle("Rainbow Verification Details")
+	inputWindow.SetInnerSize(400, 220)
+	inputWindow.SetResizable(false)
+	inputWindow.SetHasMaxButton(false)
+
+	font, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -11})
+	inputWindow.SetFont(font)
+
+	lbl1 := wui.NewLabel()
+	lbl1.SetBounds(10, 10, 380, 20)
+	lbl1.SetText("Location: " + v.Location)
+	inputWindow.Add(lbl1)
+
+	lbl2 := wui.NewLabel()
+	lbl2.SetBounds(10, 30, 380, 20)
+	lbl2.SetText("Time: " + v.Date)
+	inputWindow.Add(lbl2)
+
+	lbl3 := wui.NewLabel()
+	lbl3.SetBounds(10, 60, 80, 20)
+	lbl3.SetText("Comment:")
+	inputWindow.Add(lbl3)
+	editComment := wui.NewEditLine()
+	editComment.SetBounds(100, 60, 280, 20)
+	editComment.SetText(v.Comment)
+	inputWindow.Add(editComment)
+
+	lbl4 := wui.NewLabel()
+	lbl4.SetBounds(10, 90, 80, 20)
+	lbl4.SetText("Source/Link:")
+	inputWindow.Add(lbl4)
+	editSource := wui.NewEditLine()
+	editSource.SetBounds(100, 90, 280, 20)
+	editSource.SetText(v.Source)
+	inputWindow.Add(editSource)
+
+	lbl5 := wui.NewLabel()
+	lbl5.SetBounds(10, 120, 80, 20)
+	lbl5.SetText("Description:")
+	inputWindow.Add(lbl5)
+	editDesc := wui.NewEditLine()
+	editDesc.SetBounds(100, 120, 280, 20)
+	editDesc.SetText(v.Description)
+	inputWindow.Add(editDesc)
+
+	btnSave := wui.NewButton()
+	btnSave.SetBounds(150, 160, 100, 25)
+	btnSave.SetText("Save")
+	btnSave.SetOnClick(func() {
+		v.Comment = editComment.Text()
+		v.Source = editSource.Text()
+		v.Description = editDesc.Text()
+		appConfig.Verifications[ts] = v
+		saveConfig()
+		updateVerifiedTable()
+		inputWindow.Close()
+	})
+	inputWindow.Add(btnSave)
+
+	inputWindow.ShowModal()
+}
+
+func showRainbowDatabaseWindow() {
+	dbWindow := wui.NewWindow()
+	dbWindow.SetTitle("Rainbow Database Viewer")
+	dbWindow.SetInnerSize(900, 500)
+
+	font, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -11})
+	dbWindow.SetFont(font)
+
+	table := wui.NewStringTable("Date", "Location", "Lat", "Lon", "Temp", "Icon", "Comment", "Source", "Description")
+	table.SetBounds(10, 10, 880, 480)
+	dbWindow.Add(table)
+
+	// Load data from CSV if possible, otherwise from appConfig
+	exePath, _ := os.Executable()
+	exeDir := filepath.Dir(exePath)
+	exeName := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
+	csvPath := filepath.Join(exeDir, exeName, "db", ".csv")
+
+	data, err := os.ReadFile(csvPath)
+	if err == nil {
+		lines := strings.Split(string(data), "\n")
+		for i, line := range lines {
+			if i == 0 || strings.TrimSpace(line) == "" {
+				continue
+			}
+			parts := strings.Split(line, ",")
+			if len(parts) >= 10 {
+				row := table.RowCount()
+				// Date is at index 1 in our CSV format
+				table.SetCell(0, row, parts[1])
+				table.SetCell(1, row, parts[4])
+				table.SetCell(2, row, parts[2])
+				table.SetCell(3, row, parts[3])
+				table.SetCell(4, row, parts[5])
+				table.SetCell(5, row, parts[6])
+				table.SetCell(6, row, parts[7])
+				table.SetCell(7, row, parts[8])
+				table.SetCell(8, row, parts[9])
+			}
+		}
+	} else {
+		// Fallback to appConfig
+		var list []VerificationData
+		for _, v := range appConfig.Verifications {
+			list = append(list, v)
+		}
+		sort.Slice(list, func(i, j int) bool {
+			return list[i].Timestamp > list[j].Timestamp
+		})
+		for _, v := range list {
+			row := table.RowCount()
+			table.SetCell(0, row, v.Date)
+			table.SetCell(1, row, v.Location)
+			table.SetCell(2, row, fmt.Sprintf("%.4f", v.Lat))
+			table.SetCell(3, row, fmt.Sprintf("%.4f", v.Lon))
+			table.SetCell(4, row, fmt.Sprintf("%.1f", v.Temp))
+			table.SetCell(5, row, v.Icon)
+			table.SetCell(6, row, v.Comment)
+			table.SetCell(7, row, v.Source)
+			table.SetCell(8, row, v.Description)
+		}
+	}
+
+	dbWindow.ShowModal()
+}
+
+func saveVerificationsToCSV() {
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	exeDir := filepath.Dir(exePath)
+	exeName := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
+	dbDir := filepath.Join(exeDir, exeName, "db")
+	os.MkdirAll(dbDir, 0755)
+	csvPath := filepath.Join(dbDir, ".csv")
+
+	f, err := os.Create(csvPath)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	// Header
+	f.WriteString("Timestamp,Date,Latitude,Longitude,Location,Temperature,Icon,Comment,Source,Description\n")
+
+	// Data
+	var list []VerificationData
+	for _, v := range appConfig.Verifications {
+		list = append(list, v)
+	}
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].Timestamp > list[j].Timestamp
+	})
+
+	for _, v := range list {
+		comment := strings.ReplaceAll(v.Comment, ",", ";")
+		source := strings.ReplaceAll(v.Source, ",", ";")
+		description := strings.ReplaceAll(v.Description, ",", ";")
+		location := strings.ReplaceAll(v.Location, ",", ";")
+
+		line := fmt.Sprintf("%s,%s,%.4f,%.4f,%s,%.1f,%s,%s,%s,%s\n",
+			v.Timestamp, v.Date, v.Lat, v.Lon, location, v.Temp, v.Icon, comment, source, description)
+		f.WriteString(line)
+	}
+}
+
 func updateVerifiedTable() {
 	if verifiedTable == nil {
 		return
@@ -1754,6 +1928,7 @@ func updateVerifiedTable() {
 		verifiedTable.SetCell(4, row, v.Icon)
 		verifiedTable.SetCell(5, row, fmt.Sprintf("%.1f", v.Temp))
 	}
+	saveVerificationsToCSV()
 }
 
 func onVerifiedTableSelection() {
@@ -2107,25 +2282,41 @@ func createUI() {
 	mainWindow.SetHasMaxButton(false)
 	mainWindow.SetTitle("Rainbow Tool")
 
+	themePaths := []string{}
 	loadThemes := func() {
 		exePath, _ := os.Executable()
 		exeDir := filepath.Dir(exePath)
-		schemesDir := filepath.Join(exeDir, "schemes")
-		files, err := os.ReadDir(schemesDir)
-		if err != nil {
-			return
+		exeName := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
+
+		dirs := []string{
+			filepath.Join(exeDir, "schemes"),
+			filepath.Join(exeDir, exeName, "schemes"),
 		}
 
 		themeCombo.Clear()
 		themeItems = nil
+		themePaths = nil
+		seenNames := make(map[string]bool)
 		selectedIndex := -1
-		for _, f := range files {
-			if !f.IsDir() && strings.HasSuffix(strings.ToLower(f.Name()), ".json") {
-				name := strings.TrimSuffix(f.Name(), filepath.Ext(f.Name()))
-				themeItems = append(themeItems, f.Name())
-				themeCombo.AddItem(name)
-				if name == appConfig.ThemeName {
-					selectedIndex = len(themeItems) - 1
+
+		for _, schemesDir := range dirs {
+			files, err := os.ReadDir(schemesDir)
+			if err != nil {
+				continue
+			}
+
+			for _, f := range files {
+				if !f.IsDir() && strings.HasSuffix(strings.ToLower(f.Name()), ".json") {
+					name := strings.TrimSuffix(f.Name(), filepath.Ext(f.Name()))
+					if !seenNames[name] {
+						seenNames[name] = true
+						themeItems = append(themeItems, name)
+						themePaths = append(themePaths, filepath.Join(schemesDir, f.Name()))
+						themeCombo.AddItem(name)
+						if name == appConfig.ThemeName {
+							selectedIndex = len(themeItems) - 1
+						}
+					}
 				}
 			}
 		}
@@ -2135,12 +2326,10 @@ func createUI() {
 	}
 
 	applyTheme := func(index int) {
-		if index < 0 || index >= len(themeItems) {
+		if index < 0 || index >= len(themePaths) {
 			return
 		}
-		exePath, _ := os.Executable()
-		exeDir := filepath.Dir(exePath)
-		themePath := filepath.Join(exeDir, "schemes", themeItems[index])
+		themePath := themePaths[index]
 
 		data, err := os.ReadFile(themePath)
 		if err != nil {
@@ -2156,7 +2345,7 @@ func createUI() {
 		oldVerifications := appConfig.Verifications
 		appConfig = newConfig
 		appConfig.Verifications = oldVerifications
-		appConfig.ThemeName = strings.TrimSuffix(themeItems[index], filepath.Ext(themeItems[index]))
+		appConfig.ThemeName = themeItems[index]
 
 		saveConfig()
 		if mainCanvas != nil {
@@ -2365,7 +2554,7 @@ func createUI() {
 			ts := fmt.Sprintf("%d", selectedHourData.Time.Unix())
 			if checked {
 				icon, _ := weatherInfo(selectedHourData.WeatherCode)
-				appConfig.Verifications[ts] = VerificationData{
+				v := VerificationData{
 					Timestamp: ts,
 					Date:      selectedHourData.Time.Format("02-01-2006 15:04"),
 					Lat:       currentLat,
@@ -2374,12 +2563,17 @@ func createUI() {
 					Temp:      selectedHourData.Temperature2m,
 					Icon:      icon,
 				}
+				appConfig.Verifications[ts] = v
+				saveConfig()
+				updateHourlyTable()
+				updateVerifiedTable()
+				showVerificationInputDialog(ts, v)
 			} else {
 				delete(appConfig.Verifications, ts)
+				saveConfig()
+				updateHourlyTable()
+				updateVerifiedTable()
 			}
-			saveConfig()
-			updateHourlyTable()
-			updateVerifiedTable()
 		}
 	})
 	mainWindow.Add(checkVerified)
@@ -2415,10 +2609,16 @@ func createUI() {
 
 	// Verified Rainbows table
 	labelVerified := wui.NewLabel()
-	labelVerified.SetBounds(655, 255, 180, 16)
+	labelVerified.SetBounds(655, 255, 120, 16)
 	labelVerified.SetText("✅ Verified Rainbows")
 	labelVerified.SetFont(fontTable)
 	mainWindow.Add(labelVerified)
+
+	btnViewDB := wui.NewButton()
+	btnViewDB.SetBounds(840, 253, 110, 20)
+	btnViewDB.SetText("View Database")
+	btnViewDB.SetOnClick(func() { showRainbowDatabaseWindow() })
+	mainWindow.Add(btnViewDB)
 
 	verifiedTable = wui.NewStringTable("📅 Date", "📍 Location", "Lat", "Lon", "Icon", "Temp")
 	verifiedTable.SetBounds(655, 275, 295, 135)
