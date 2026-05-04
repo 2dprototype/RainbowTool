@@ -233,6 +233,7 @@ type HourlyData struct {
 	WindSpeed10m       float64
 	Visibility         float64 // NEW
 	DirectRadiation    float64 // NEW
+	DewPoint2m         float64 // NEW
 }
 
 func initDefaultConfig() {
@@ -772,6 +773,7 @@ func extractHourlyDataForDay(w *WeatherResponse, targetDate time.Time) []HourlyD
 				WindSpeed10m:       w.Hourly.WindSpeed10m[i],
 				Visibility:         visibility,
 				DirectRadiation:    w.Hourly.DirectRadiation[i],
+				DewPoint2m:         w.Hourly.DewPoint2m[i],
 			})
 		}
 	}
@@ -1738,6 +1740,7 @@ func showVerificationInputDialog(ts string, v VerificationData) {
 	inputWindow := wui.NewWindow()
 	inputWindow.SetTitle("Rainbow Verification Details")
 	inputWindow.SetInnerSize(400, 220)
+	inputWindow.SetPosition(320, 140)
 	inputWindow.SetResizable(false)
 	inputWindow.SetHasMaxButton(false)
 
@@ -1802,6 +1805,9 @@ func showRainbowDatabaseWindow() {
 	dbWindow := wui.NewWindow()
 	dbWindow.SetTitle("Rainbow Database Viewer")
 	dbWindow.SetInnerSize(900, 500)
+	dbWindow.SetPosition(55, 20)
+	dbWindow.SetResizable(false)
+	dbWindow.SetHasMaxButton(false)
 
 	font, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -11})
 	dbWindow.SetFont(font)
@@ -2268,6 +2274,77 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 			// c.Line(x1, sy1+1, x2, sy2+1, scoreColor)
 		}
 		c.TextOut(5, 2, "ADV: Score(Yel), Sun(Orng), RainVol(Blu), Rad(Red)", wui.RGB(255, 255, 255))
+	case 6: // Humidity & Dew Point
+		dpColor := wui.RGB(0, 255, 200)
+		humColor := wui.RGB(100, 200, 255)
+		
+		minVal, maxVal := -10.0, 40.0
+		for _, d := range hourlyData {
+			if d.DewPoint2m < minVal { minVal = d.DewPoint2m }
+			if d.DewPoint2m > maxVal { maxVal = d.DewPoint2m }
+		}
+		
+		for i := 0; i < len(hourlyData)-1; i++ {
+			x1 := i * w / (len(hourlyData) - 1)
+			x2 := (i + 1) * w / (len(hourlyData) - 1)
+			
+			dy1 := int(float64(h-20) - (hourlyData[i].DewPoint2m-minVal)/(maxVal-minVal)*float64(h-20) + 10)
+			dy2 := int(float64(h-20) - (hourlyData[i+1].DewPoint2m-minVal)/(maxVal-minVal)*float64(h-20) + 10)
+			
+			hy1 := int(float64(h-20) - (hourlyData[i].RelativeHumidity2m/100.0)*float64(h-20) + 10)
+			hy2 := int(float64(h-20) - (hourlyData[i+1].RelativeHumidity2m/100.0)*float64(h-20) + 10)
+			
+			c.Line(x1, dy1, x2, dy2, dpColor)
+			c.Line(x1, hy1, x2, hy2, humColor)
+		}
+		c.TextOut(5, 2, "Moisture: Dew Point (Cyan) / Humidity % (Blue)", wui.RGB(200, 255, 255))
+	case 7: // Solar Energy Potential
+		solColor := wui.RGB(255, 220, 0)
+		maxRad := 1.0
+		for _, d := range hourlyData {
+			if d.DirectRadiation > maxRad { maxRad = d.DirectRadiation }
+		}
+		
+		for i := 0; i < len(hourlyData)-1; i++ {
+			x1 := i * w / (len(hourlyData) - 1)
+			x2 := (i + 1) * w / (len(hourlyData) - 1)
+			
+			ry1 := int(float64(h-20) - (hourlyData[i].DirectRadiation/maxRad)*float64(h-20) + 10)
+			ry2 := int(float64(h-20) - (hourlyData[i+1].DirectRadiation/maxRad)*float64(h-20) + 10)
+			
+			c.Line(x1, ry1, x2, ry2, solColor)
+			if hourlyData[i].DirectRadiation > 500 {
+				c.FillRect(x1, h-5, x2-x1+1, 5, wui.RGB(255, 0, 0)) // High UV/Heat risk
+			}
+		}
+		c.TextOut(5, 2, "Energy: Solar Radiation (Yellow) / Red = High Intensity", wui.RGB(255, 255, 200))
+	case 8: // Fog & Visibility Risk
+		visColor := wui.RGB(200, 200, 255)
+		riskColor := wui.RGB(255, 100, 255)
+		
+		for i := 0; i < len(hourlyData)-1; i++ {
+			x1 := i * w / (len(hourlyData) - 1)
+			x2 := (i + 1) * w / (len(hourlyData) - 1)
+			
+			vy1 := int(float64(h-20) - (hourlyData[i].Visibility/24000.0)*float64(h-20) + 10)
+			vy2 := int(float64(h-20) - (hourlyData[i+1].Visibility/24000.0)*float64(h-20) + 10)
+			
+			// Fog Risk = Low Temp/DewPoint spread + High Humidity
+			spread := hourlyData[i].Temperature2m - hourlyData[i].DewPoint2m
+			risk := 0.0
+			if spread < 2 && hourlyData[i].RelativeHumidity2m > 80 {
+				risk = 100.0
+			} else if spread < 5 {
+				risk = 50.0
+			}
+			
+			ry1 := int(float64(h-20) - (risk/100.0)*float64(h-20) + 10)
+			ry2 := int(float64(h-20) - (risk/100.0)*float64(h-20) + 10) // Step function
+			
+			c.Line(x1, vy1, x2, vy2, visColor)
+			c.Line(x1, ry1, x2, ry2, riskColor)
+		}
+		c.TextOut(5, 2, "Safety: Visibility (Light Blue) / Fog Risk (Pink)", wui.RGB(255, 200, 255))
 	}
 }
 
@@ -2277,7 +2354,7 @@ func createUI() {
 	mainWindow.SetFont(windowFont)
 
 	mainWindow.SetInnerSize(960, 440)
-	mainWindow.SetPosition(20, 70)
+	mainWindow.SetPosition(25, 50)
 	mainWindow.SetResizable(false)
 	mainWindow.SetHasMaxButton(false)
 	mainWindow.SetTitle("Rainbow Tool")
@@ -2646,6 +2723,9 @@ func createUI() {
 	analysisCombo.AddItem("Cloud vs Precipitation")
 	analysisCombo.AddItem("Wind Speed & Visibility")
 	analysisCombo.AddItem("Advanced Rainbow Analysis")
+	analysisCombo.AddItem("Humidity & Dew Point")
+	analysisCombo.AddItem("Solar Energy Potential")
+	analysisCombo.AddItem("Fog & Visibility Risk")
 	analysisCombo.SetSelectedIndex(0)
 	analysisCombo.SetOnChange(func(index int) {
 		if analysisCanvas != nil {
@@ -2706,7 +2786,7 @@ func createQuickUI() {
 	mainWindow.SetInnerSize(340, 240)
 	mainWindow.SetResizable(false)
 	mainWindow.SetHasMaxButton(false)
-	mainWindow.SetPosition(300, 70)
+	mainWindow.SetPosition(340, 130)
 	mainWindow.SetTitle("Rainbow Tool Quick")
 
 	labelMainTemp = wui.NewLabel()
