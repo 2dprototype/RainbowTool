@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"github.com/2dprototype/wui"
 )
 
@@ -131,10 +131,10 @@ var (
 	mainWindow *wui.Window
 
 	// header
-	searchEdit  *wui.EditLine
-	searchCombo *wui.ComboBox
-	searchItems []geocodingItem
-	btnGeo      *wui.Button
+	searchEdit    *wui.EditLine
+	searchCombo   *wui.ComboBox
+	searchItems   []geocodingItem
+	btnGeo        *wui.Button
 
 	// current weather
 	labelMainTemp  *wui.Label
@@ -204,6 +204,8 @@ var (
 
 	// analysis
 	analysisCombo *wui.ComboBox
+	btnEditDB     *wui.Button
+	btnViewDB     *wui.Button
 )
 
 type geocodingItem struct {
@@ -790,7 +792,15 @@ func setLabelText(l *wui.Label, text string) {
 }
 
 func updateCurrentWeather() {
-	if selectedDayData != nil && selectedDate != "today" {
+	if selectedHourData != nil {
+		// Show selected hour's data
+		icon, desc := weatherInfo(selectedHourData.WeatherCode)
+		setLabelText(labelMainTemp, formatTemp(selectedHourData.Temperature2m))
+		setLabelText(labelMainFeels, fmt.Sprintf("Wind: %.1f km/h · Hum: %.0f%%", selectedHourData.WindSpeed10m, selectedHourData.RelativeHumidity2m))
+		setLabelText(labelMainIcon, icon)
+		setLabelText(labelDesc, desc)
+		setLabelText(labelDate, selectedHourData.Time.Format("Mon, Jan 2, 2006 15:04"))
+	} else if selectedDayData != nil && selectedDate != "today" {
 		// Show selected day's data (not current)
 		icon, desc := weatherInfo(selectedDayData.WeatherCode)
 		setLabelText(labelMainTemp, formatTemp(selectedDayData.TemperatureMax))
@@ -830,7 +840,6 @@ func updateFeatures() {
 	}
 
 	c := weatherCache.Current
-	dailyData := getAllDailyData()
 
 	lat := weatherCache.Latitude
 	lon := weatherCache.Longitude
@@ -869,15 +878,22 @@ func updateFeatures() {
 	setLabelText(featureLabels["sunDetail"], sunElevDetail)
 	setLabelText(featureLabels["sunBadge"], "Angle")
 
-	precipProb := c.Precipitation
-	if precipProb == 0 && len(dailyData) > 0 {
-		precipProb = dailyData[0].PrecipitationMax
+	precipVal := c.Precipitation
+	cloudVal := c.CloudCover
+
+	if selectedHourData != nil {
+		precipVal = selectedHourData.PrecipitationProb
+		cloudVal = selectedHourData.CloudCover
+	} else if selectedDayData != nil && selectedDate != "today" {
+		precipVal = selectedDayData.PrecipitationMax
+		// Cloud cover isn't directly in DailyDayData, we'll stick to current or default
 	}
-	setLabelText(featureLabels["precip"], fmt.Sprintf("%.0f%%", precipProb))
+
+	setLabelText(featureLabels["precip"], fmt.Sprintf("%.0f%%", precipVal))
 	setLabelText(featureLabels["precipDetail"], "Required for bows")
 	setLabelText(featureLabels["precipBadge"], "Moisture")
 
-	setLabelText(featureLabels["cloud"], fmt.Sprintf("%.0f%%", c.CloudCover))
+	setLabelText(featureLabels["cloud"], fmt.Sprintf("%.0f%%", cloudVal))
 	setLabelText(featureLabels["cloudDetail"], "Need < 95%")
 	setLabelText(featureLabels["cloudBadge"], "Blockage")
 
@@ -1093,6 +1109,10 @@ func onHourlyTableSelection() {
 		_, exists := appConfig.Verifications[ts]
 		checkVerified.SetChecked(exists)
 	}
+
+	// UPDATE: Refresh UI with this moment's data
+	updateCurrentWeather()
+	updateFeatures()
 
 	if mainCanvas != nil {
 		mainCanvas.Paint()
@@ -1736,71 +1756,6 @@ func onDateSearchClick() {
 	}()
 }
 
-func showVerificationInputDialog(ts string, v VerificationData) {
-	inputWindow := wui.NewWindow()
-	inputWindow.SetTitle("Rainbow Verification Details")
-	inputWindow.SetInnerSize(400, 220)
-	inputWindow.SetPosition(320, 140)
-	inputWindow.SetResizable(false)
-	inputWindow.SetHasMaxButton(false)
-
-	font, _ := wui.NewFont(wui.FontDesc{Name: "Tahoma", Height: -11})
-	inputWindow.SetFont(font)
-
-	lbl1 := wui.NewLabel()
-	lbl1.SetBounds(10, 10, 380, 20)
-	lbl1.SetText("Location: " + v.Location)
-	inputWindow.Add(lbl1)
-
-	lbl2 := wui.NewLabel()
-	lbl2.SetBounds(10, 30, 380, 20)
-	lbl2.SetText("Time: " + v.Date)
-	inputWindow.Add(lbl2)
-
-	lbl3 := wui.NewLabel()
-	lbl3.SetBounds(10, 60, 80, 20)
-	lbl3.SetText("Comment:")
-	inputWindow.Add(lbl3)
-	editComment := wui.NewEditLine()
-	editComment.SetBounds(100, 60, 280, 20)
-	editComment.SetText(v.Comment)
-	inputWindow.Add(editComment)
-
-	lbl4 := wui.NewLabel()
-	lbl4.SetBounds(10, 90, 80, 20)
-	lbl4.SetText("Source/Link:")
-	inputWindow.Add(lbl4)
-	editSource := wui.NewEditLine()
-	editSource.SetBounds(100, 90, 280, 20)
-	editSource.SetText(v.Source)
-	inputWindow.Add(editSource)
-
-	lbl5 := wui.NewLabel()
-	lbl5.SetBounds(10, 120, 80, 20)
-	lbl5.SetText("Description:")
-	inputWindow.Add(lbl5)
-	editDesc := wui.NewEditLine()
-	editDesc.SetBounds(100, 120, 280, 20)
-	editDesc.SetText(v.Description)
-	inputWindow.Add(editDesc)
-
-	btnSave := wui.NewButton()
-	btnSave.SetBounds(150, 160, 100, 25)
-	btnSave.SetText("Save")
-	btnSave.SetOnClick(func() {
-		v.Comment = editComment.Text()
-		v.Source = editSource.Text()
-		v.Description = editDesc.Text()
-		appConfig.Verifications[ts] = v
-		saveConfig()
-		updateVerifiedTable()
-		inputWindow.Close()
-	})
-	inputWindow.Add(btnSave)
-
-	inputWindow.ShowModal()
-}
-
 func showRainbowDatabaseWindow() {
 	dbWindow := wui.NewWindow()
 	dbWindow.SetTitle("Rainbow Database Viewer")
@@ -1867,7 +1822,143 @@ func showRainbowDatabaseWindow() {
 		}
 	}
 
+	// table.SetOnSelectionChange(func() {
+		// selectedRow := table.SelectedRow()
+		// if selectedRow < 0 {
+			// return
+		// }
+
+		// // Find the verification data corresponding to this row
+		// var list []VerificationData
+		// for _, v := range appConfig.Verifications {
+			// list = append(list, v)
+		// }
+		// sort.Slice(list, func(i, j int) bool {
+			// return list[i].Timestamp > list[j].Timestamp
+		// })
+
+		// if selectedRow < len(list) {
+			// v := list[selectedRow]
+			// fmt.Println(v)
+		// }
+	// })
+
 	dbWindow.ShowModal()
+}
+
+func showRainbowDatabaseEditor() {
+	editorWindow := wui.NewWindow()
+	editorWindow.SetTitle("Database CSV Editor")
+	editorWindow.SetInnerSize(800, 450)
+	editorWindow.SetPosition(100, 50)
+	editorWindow.SetResizable(false)
+	editorWindow.SetHasMaxButton(false)
+
+	font, _ := wui.NewFont(wui.FontDesc{Name: "Consolas", Height: -12})
+	editorWindow.SetFont(font)
+
+	textEdit := wui.NewTextEdit()
+	textEdit.SetBounds(10, 10, 780, 400)
+	textEdit.SetWordWrap(false)
+	textEdit.SetWritesTabs(true)
+	editorWindow.Add(textEdit)
+
+	// Load CSV data
+	exePath, _ := os.Executable()
+	exeDir := filepath.Dir(exePath)
+	exeName := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
+	csvPath := filepath.Join(exeDir, exeName, "db", ".csv")
+
+	var content string
+	data, err := os.ReadFile(csvPath)
+	if err == nil {
+		content = string(data)
+	} else {
+		// If CSV doesn't exist, generate from current verifications
+		var list []VerificationData
+		for _, v := range appConfig.Verifications {
+			list = append(list, v)
+		}
+		sort.Slice(list, func(i, j int) bool {
+			return list[i].Timestamp > list[j].Timestamp
+		})
+
+		var sb strings.Builder
+		sb.WriteString("Timestamp,Date,Latitude,Longitude,Location,Temperature,Icon,Comment,Source,Description\n")
+		for _, v := range list {
+			line := fmt.Sprintf("%s,%s,%.4f,%.4f,%s,%.1f,%s,%s,%s,%s\n",
+				v.Timestamp, v.Date, v.Lat, v.Lon, v.Location, v.Temp, v.Icon, v.Comment, v.Source, v.Description)
+			sb.WriteString(line)
+		}
+		content = sb.String()
+	}
+
+	// Normalize line endings: replace all \n with \r\n for Windows text edit
+	// First normalize any existing \r\n to \n, then replace all \n with \r\n
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\n", "\r\n")
+	
+	textEdit.SetText(content)
+
+	btnSave := wui.NewButton()
+	btnSave.SetBounds(10, 420, 50, 23)
+	btnSave.SetText("Save")
+	btnSave.SetOnClick(func() {
+		newContent := textEdit.Text()
+		// Normalize line endings back: replace \r\n with \n for storage
+		newContent = strings.ReplaceAll(newContent, "\r\n", "\n")
+		
+		// Save to file
+		os.MkdirAll(filepath.Dir(csvPath), 0755)
+		err := os.WriteFile(csvPath, []byte(newContent), 0644)
+		if err != nil {
+			wui.MessageBox("Error", "Could not save file: "+err.Error())
+			return
+		}
+
+		// Reload into appConfig
+		r := csv.NewReader(strings.NewReader(newContent))
+		records, err := r.ReadAll()
+		if err != nil {
+			wui.MessageBox("Error", "Invalid CSV format: "+err.Error())
+			return
+		}
+
+		if len(records) > 0 {
+			newVerifications := make(map[string]VerificationData)
+			for i, row := range records {
+				if i == 0 {
+					continue // Skip header
+				}
+				if len(row) >= 10 {
+					lat, _ := strconv.ParseFloat(row[2], 64)
+					lon, _ := strconv.ParseFloat(row[3], 64)
+					temp, _ := strconv.ParseFloat(row[5], 64)
+					v := VerificationData{
+						Timestamp:   row[0],
+						Date:        row[1],
+						Lat:         lat,
+						Lon:         lon,
+						Location:    row[4],
+						Temp:        temp,
+						Icon:        row[6],
+						Comment:     row[7],
+						Source:      row[8],
+						Description: row[9],
+					}
+					newVerifications[v.Timestamp] = v
+				}
+			}
+			appConfig.Verifications = newVerifications
+			saveConfig()
+			updateVerifiedTable()
+			wui.MessageBox("Success", "Database updated and reloaded.")
+			editorWindow.Close()
+		}
+	})
+	editorWindow.Add(btnSave)
+
+	editorWindow.ShowModal()
 }
 
 func saveVerificationsToCSV() {
@@ -2069,13 +2160,25 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 		lat, lon = weatherCache.Latitude, weatherCache.Longitude
 	}
 
-	// Helper to draw grid
+	// 1. Draw enhanced grid and axis markers
 	gridColor := wui.RGB(60, 60, 70)
+	// textColor := wui.RGB(100, 100, 110)
 	for i := 0; i <= 4; i++ {
 		y := i * (h - 20) / 4
 		c.Line(0, y+10, w, y+10, gridColor)
+		// Y-axis context labels
+		// if i == 0 {
+			// c.TextOut(w-35, y+12, "Max", textColor)
+		// }
+		// if i == 2 {
+			// c.TextOut(w-35, y+2, "Mid", textColor)
+		// }
+		// if i == 4 {
+			// c.TextOut(w-35, y-8, "Min", textColor)
+		// }
 	}
 
+	// 2. Draw Graphs based on selection
 	switch graphType {
 	case 0: // Temp & Rain %
 		minTemp, maxTemp := 100.0, -100.0
@@ -2104,17 +2207,24 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 			ty1 := int(float64(h-20) - (hourlyData[i].Temperature2m-minTemp)/(maxTemp-minTemp)*float64(h-20) + 10)
 			ty2 := int(float64(h-20) - (hourlyData[i+1].Temperature2m-minTemp)/(maxTemp-minTemp)*float64(h-20) + 10)
 			c.Line(x1, ty1, x2, ty2, tempColor)
+			// c.FillEllipse(x1-2, ty1-2, 5, 5, tempColor) // Add Data Point
 
 			// Precip
 			py1 := int(float64(h-20) - (hourlyData[i].PrecipitationProb/100.0)*float64(h-20) + 10)
 			py2 := int(float64(h-20) - (hourlyData[i+1].PrecipitationProb/100.0)*float64(h-20) + 10)
 			c.Line(x1, py1, x2, py2, precipColor)
+			// c.FillEllipse(x1-2, py1-2, 5, 5, precipColor) // Add Data Point
+
+			// if i == len(hourlyData)-2 { // Draw very last points
+				// c.FillEllipse(x2-2, ty2-2, 5, 5, tempColor)
+				// c.FillEllipse(x2-2, py2-2, 5, 5, precipColor)
+			// }
 		}
 		c.TextOut(5, 2, "Environment: Temp (Red) / Rain% (Blue)", wui.RGB(200, 200, 200))
 
 	case 1: // Rainbow Score Trend
 		rainbows := predictRainbow(hourlyData, lat, lon, tzOff, true)
-		scores := make(map[int]int) // hour -> score
+		scores := make(map[int]int)
 		for _, r := range rainbows {
 			scores[r.Time.Hour()] = r.Score
 		}
@@ -2131,7 +2241,11 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 			sy2 := int(float64(h-20) - (s2/100.0)*float64(h-20) + 10)
 
 			c.Line(x1, sy1, x2, sy2, scoreColor)
-			c.Line(x1, sy1+1, x2, sy2+1, scoreColor)
+			c.FillEllipse(x1-2, sy1-2, 5, 5, scoreColor) // Add Data Point
+
+			if i == len(hourlyData)-2 {
+				c.FillEllipse(x2-2, sy2-2, 5, 5, scoreColor)
+			}
 		}
 		c.TextOut(5, 2, "Rainbow Analysis: Probability Score (0-100%)", wui.RGB(255, 255, 200))
 
@@ -2147,21 +2261,21 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 			e1 := getSolarElevationUTC(lat, lon, utc1)
 			e2 := getSolarElevationUTC(lat, lon, utc2)
 
-			// Scale 0 to 90 degrees
 			ey1 := int(float64(h-20) - (e1/90.0)*float64(h-20) + 10)
 			ey2 := int(float64(h-20) - (e2/90.0)*float64(h-20) + 10)
 
-			if ey1 > h {
-				ey1 = h
-			}
-			if ey2 > h {
-				ey2 = h
-			}
+			if ey1 > h { ey1 = h }
+			if ey2 > h { ey2 = h }
 
 			c.Line(x1, ey1, x2, ey2, sunColor)
-			// Rainbow possible zone (0-42)
+			c.FillEllipse(x1-2, ey1-2, 5, 5, sunColor) // Add Data Point
+
 			if e1 > 0 && e1 < 42 {
 				c.FillRect(x1, h-5, x2-x1+1, 5, wui.RGB(0, 255, 0))
+			}
+
+			if i == len(hourlyData)-2 {
+				c.FillEllipse(x2-2, ey2-2, 5, 5, sunColor)
 			}
 		}
 		c.TextOut(5, 2, "Sun Analysis: Elevation Angle (Green = Potential Window)", wui.RGB(200, 200, 200))
@@ -2181,13 +2295,22 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 			ry2 := int(float64(h-20) - (hourlyData[i+1].PrecipitationProb/100.0)*float64(h-20) + 10)
 
 			c.Line(x1, cy1, x2, cy2, cloudColor)
+			c.FillEllipse(x1-2, cy1-2, 4, 4, cloudColor) // Add Data Point
+
 			c.Line(x1, ry1, x2, ry2, rainColor)
+			c.FillEllipse(x1-2, ry1-2, 4, 4, rainColor) // Add Data Point
+
+			if i == len(hourlyData)-2 {
+				c.FillEllipse(x2-2, cy2-2, 4, 4, cloudColor)
+				c.FillEllipse(x2-2, ry2-2, 4, 4, rainColor)
+			}
 		}
 		c.TextOut(5, 2, "Detailed: Cloud Cover (Gray) / Precipitation Prob (Blue)", wui.RGB(200, 200, 200))
+
 	case 4: // Wind Speed & Visibility
 		windColor := wui.RGB(150, 255, 150)
 		visColor := wui.RGB(200, 150, 255)
-		
+
 		maxWind := 1.0
 		for _, d := range hourlyData {
 			if d.WindSpeed10m > maxWind {
@@ -2202,15 +2325,21 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 			wy1 := int(float64(h-20) - (hourlyData[i].WindSpeed10m/maxWind)*float64(h-20) + 10)
 			wy2 := int(float64(h-20) - (hourlyData[i+1].WindSpeed10m/maxWind)*float64(h-20) + 10)
 
-			// Visibility max is generally 24000m (24km)
 			vy1 := int(float64(h-20) - (hourlyData[i].Visibility/24000.0)*float64(h-20) + 10)
 			vy2 := int(float64(h-20) - (hourlyData[i+1].Visibility/24000.0)*float64(h-20) + 10)
 
 			c.Line(x1, wy1, x2, wy2, windColor)
+			c.FillEllipse(x1-2, wy1-2, 4, 4, windColor) // Add Data Point
+
 			c.Line(x1, vy1, x2, vy2, visColor)
+			c.FillEllipse(x1-2, vy1-2, 4, 4, visColor) // Add Data Point
+
+			if i == len(hourlyData)-2 {
+				c.FillEllipse(x2-2, wy2-2, 4, 4, windColor)
+				c.FillEllipse(x2-2, vy2-2, 4, 4, visColor)
+			}
 		}
 		c.TextOut(5, 2, "Wind Speed (Green) / Visibility (Purple)", wui.RGB(200, 200, 200))
-
 
 	case 5: // Super Advanced Rainbow Analysis
 		scoreColor := wui.RGB(255, 255, 0)
@@ -2223,39 +2352,26 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 			scores[r.Time.Hour()] = r.Score
 		}
 
-		maxPrecip := 0.1 // prevent division by zero
+		maxPrecip := 0.1
 		maxRad := 1.0
 		for _, d := range hourlyData {
-			if d.Precipitation > maxPrecip {
-				maxPrecip = d.Precipitation
-			}
-			if d.DirectRadiation > maxRad {
-				maxRad = d.DirectRadiation
-			}
+			if d.Precipitation > maxPrecip { maxPrecip = d.Precipitation }
+			if d.DirectRadiation > maxRad { maxRad = d.DirectRadiation }
 		}
 
 		for i := 0; i < len(hourlyData)-1; i++ {
 			x1 := i * w / (len(hourlyData) - 1)
 			x2 := (i + 1) * w / (len(hourlyData) - 1)
 
-			// 1. Draw "Rainbow Window" background heat map based on score
 			s1 := float64(scores[hourlyData[i].Time.Hour()])
 			if s1 > 10 {
-				intensity := uint8((s1 / 100.0) * 80) // Max 80 alpha-equivalent
-				c.FillRect(x1, 10, x2-x1, h-20, wui.RGB(intensity, 0, intensity/2)) // Purple-ish backdrop
+				intensity := uint8((s1 / 100.0) * 80)
+				c.FillRect(x1, 10, x2-x1, h-20, wui.RGB(intensity, 0, intensity/2))
 			}
 
 			s2 := float64(scores[hourlyData[i+1].Time.Hour()])
 			sy1 := int(float64(h-20) - (s1/100.0)*float64(h-20) + 10)
 			sy2 := int(float64(h-20) - (s2/100.0)*float64(h-20) + 10)
-
-			utc1 := hourlyData[i].Time.Add(-time.Duration(tzOff) * time.Hour)
-			utc2 := hourlyData[i+1].Time.Add(-time.Duration(tzOff) * time.Hour)
-			e1 := getSolarElevationUTC(lat, lon, utc1)
-			e2 := getSolarElevationUTC(lat, lon, utc2)
-			
-			ey1 := int(float64(h-20) - (e1/90.0)*float64(h-20) + 10)
-			ey2 := int(float64(h-20) - (e2/90.0)*float64(h-20) + 10)
 
 			py1 := int(float64(h-20) - (hourlyData[i].Precipitation/maxPrecip)*float64(h-20) + 10)
 			py2 := int(float64(h-20) - (hourlyData[i+1].Precipitation/maxPrecip)*float64(h-20) + 10)
@@ -2263,88 +2379,166 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 			ry1 := int(float64(h-20) - (hourlyData[i].DirectRadiation/maxRad)*float64(h-20) + 10)
 			ry2 := int(float64(h-20) - (hourlyData[i+1].DirectRadiation/maxRad)*float64(h-20) + 10)
 
-			if ey1 > h { ey1 = h }
-			if ey2 > h { ey2 = h }
+			c.Line(x1, py1, x2, py2, precipColor)
 
-			c.Line(x1, py1, x2, py2, precipColor)   // Actual Rain Volume (not just prob)
-			c.Line(x1, ry1, x2, ry2, radColor)      // Direct Sunlight Radiation
-			
-			// Draw Rainbow Probability Score slightly thicker
+			c.Line(x1, ry1, x2, ry2, radColor)
+
 			c.Line(x1, sy1, x2, sy2, scoreColor)
-			// c.Line(x1, sy1+1, x2, sy2+1, scoreColor)
+
+			
+			// c.FillEllipse(x1-2, py1-2, 4, 4, precipColor) // Add Data Point
+			// c.FillEllipse(x1-2, ry1-2, 4, 4, radColor) // Add Data Point
+			// c.FillEllipse(x1-2, sy1-2, 5, 5, scoreColor) // Add Data Point
+			
+			// if i == len(hourlyData)-2 {
+				// c.FillEllipse(x2-2, py2-2, 4, 4, precipColor)
+				// c.FillEllipse(x2-2, ry2-2, 4, 4, radColor)
+				// c.FillEllipse(x2-2, sy2-2, 5, 5, scoreColor)
+			// }
 		}
 		c.TextOut(5, 2, "ADV: Score(Yel), Sun(Orng), RainVol(Blu), Rad(Red)", wui.RGB(255, 255, 255))
+
 	case 6: // Humidity & Dew Point
 		dpColor := wui.RGB(0, 255, 200)
 		humColor := wui.RGB(100, 200, 255)
-		
+
 		minVal, maxVal := -10.0, 40.0
 		for _, d := range hourlyData {
 			if d.DewPoint2m < minVal { minVal = d.DewPoint2m }
 			if d.DewPoint2m > maxVal { maxVal = d.DewPoint2m }
 		}
-		
+
 		for i := 0; i < len(hourlyData)-1; i++ {
 			x1 := i * w / (len(hourlyData) - 1)
 			x2 := (i + 1) * w / (len(hourlyData) - 1)
-			
+
 			dy1 := int(float64(h-20) - (hourlyData[i].DewPoint2m-minVal)/(maxVal-minVal)*float64(h-20) + 10)
 			dy2 := int(float64(h-20) - (hourlyData[i+1].DewPoint2m-minVal)/(maxVal-minVal)*float64(h-20) + 10)
-			
+
 			hy1 := int(float64(h-20) - (hourlyData[i].RelativeHumidity2m/100.0)*float64(h-20) + 10)
 			hy2 := int(float64(h-20) - (hourlyData[i+1].RelativeHumidity2m/100.0)*float64(h-20) + 10)
-			
+
 			c.Line(x1, dy1, x2, dy2, dpColor)
+			c.FillEllipse(x1-2, dy1-2, 4, 4, dpColor) // Add Data Point
+
 			c.Line(x1, hy1, x2, hy2, humColor)
+			c.FillEllipse(x1-2, hy1-2, 4, 4, humColor) // Add Data Point
+
+			if i == len(hourlyData)-2 {
+				c.FillEllipse(x2-2, dy2-2, 4, 4, dpColor)
+				c.FillEllipse(x2-2, hy2-2, 4, 4, humColor)
+			}
 		}
 		c.TextOut(5, 2, "Moisture: Dew Point (Cyan) / Humidity % (Blue)", wui.RGB(200, 255, 255))
+
 	case 7: // Solar Energy Potential
 		solColor := wui.RGB(255, 220, 0)
 		maxRad := 1.0
 		for _, d := range hourlyData {
 			if d.DirectRadiation > maxRad { maxRad = d.DirectRadiation }
 		}
-		
+
 		for i := 0; i < len(hourlyData)-1; i++ {
 			x1 := i * w / (len(hourlyData) - 1)
 			x2 := (i + 1) * w / (len(hourlyData) - 1)
-			
+
 			ry1 := int(float64(h-20) - (hourlyData[i].DirectRadiation/maxRad)*float64(h-20) + 10)
 			ry2 := int(float64(h-20) - (hourlyData[i+1].DirectRadiation/maxRad)*float64(h-20) + 10)
-			
+
 			c.Line(x1, ry1, x2, ry2, solColor)
+			c.FillEllipse(x1-2, ry1-2, 4, 4, solColor) // Add Data Point
+
 			if hourlyData[i].DirectRadiation > 500 {
-				c.FillRect(x1, h-5, x2-x1+1, 5, wui.RGB(255, 0, 0)) // High UV/Heat risk
+				c.FillRect(x1, h-5, x2-x1+1, 5, wui.RGB(255, 0, 0))
+			}
+
+			if i == len(hourlyData)-2 {
+				c.FillEllipse(x2-2, ry2-2, 4, 4, solColor)
 			}
 		}
 		c.TextOut(5, 2, "Energy: Solar Radiation (Yellow) / Red = High Intensity", wui.RGB(255, 255, 200))
+
 	case 8: // Fog & Visibility Risk
 		visColor := wui.RGB(200, 200, 255)
 		riskColor := wui.RGB(255, 100, 255)
-		
+
 		for i := 0; i < len(hourlyData)-1; i++ {
 			x1 := i * w / (len(hourlyData) - 1)
 			x2 := (i + 1) * w / (len(hourlyData) - 1)
-			
+
 			vy1 := int(float64(h-20) - (hourlyData[i].Visibility/24000.0)*float64(h-20) + 10)
 			vy2 := int(float64(h-20) - (hourlyData[i+1].Visibility/24000.0)*float64(h-20) + 10)
-			
-			// Fog Risk = Low Temp/DewPoint spread + High Humidity
-			spread := hourlyData[i].Temperature2m - hourlyData[i].DewPoint2m
-			risk := 0.0
-			if spread < 2 && hourlyData[i].RelativeHumidity2m > 80 {
-				risk = 100.0
-			} else if spread < 5 {
-				risk = 50.0
-			}
-			
-			ry1 := int(float64(h-20) - (risk/100.0)*float64(h-20) + 10)
-			ry2 := int(float64(h-20) - (risk/100.0)*float64(h-20) + 10) // Step function
-			
+
+			spread1 := hourlyData[i].Temperature2m - hourlyData[i].DewPoint2m
+			risk1 := 0.0
+			if spread1 < 2 && hourlyData[i].RelativeHumidity2m > 80 { risk1 = 100.0 } else if spread1 < 5 { risk1 = 50.0 }
+
+			spread2 := hourlyData[i+1].Temperature2m - hourlyData[i+1].DewPoint2m
+			risk2 := 0.0
+			if spread2 < 2 && hourlyData[i+1].RelativeHumidity2m > 80 { risk2 = 100.0 } else if spread2 < 5 { risk2 = 50.0 }
+
+			ry1 := int(float64(h-20) - (risk1/100.0)*float64(h-20) + 10)
+			ry2 := int(float64(h-20) - (risk2/100.0)*float64(h-20) + 10)
+
 			c.Line(x1, vy1, x2, vy2, visColor)
+			c.FillEllipse(x1-2, vy1-2, 4, 4, visColor) // Add Data Point
+
 			c.Line(x1, ry1, x2, ry2, riskColor)
+			c.FillEllipse(x1-2, ry1-2, 4, 4, riskColor) // Add Data Point
+
+			if i == len(hourlyData)-2 {
+				c.FillEllipse(x2-2, vy2-2, 4, 4, visColor)
+				c.FillEllipse(x2-2, ry2-2, 4, 4, riskColor)
+			}
 		}
 		c.TextOut(5, 2, "Safety: Visibility (Light Blue) / Fog Risk (Pink)", wui.RGB(255, 200, 255))
+	}
+
+	// 3. --- DRAW ACTIVE HOUR MARKER (GREEN BAR) ---
+	var targetTime time.Time
+	if selectedHourData != nil {
+		targetTime = selectedHourData.Time
+	} else {
+		isToday := selectedDate == "today" || selectedDate == "" || (selectedDayData != nil && selectedDayData.Date.Format("2006-01-02") == time.Now().Format("2006-01-02"))
+		if isToday {
+			now := time.Now()
+			for _, hd := range hourlyData {
+				if hd.Time.Hour() == now.Hour() {
+					targetTime = hd.Time
+					break
+				}
+			}
+		} else {
+			rainbowPreds := predictRainbow(hourlyData, lat, lon, tzOff, true)
+			if len(rainbowPreds) > 0 {
+				targetTime = rainbowPreds[0].Time
+			} else if len(hourlyData) > 0 {
+				targetTime = hourlyData[0].Time
+			}
+		}
+	}
+
+	activeIdx := -1
+	for i, hd := range hourlyData {
+		if !targetTime.IsZero() && hd.Time.Hour() == targetTime.Hour() && hd.Time.Day() == targetTime.Day() {
+			activeIdx = i
+			break
+		}
+	}
+
+	if activeIdx >= 0 && len(hourlyData) > 1 {
+		x := activeIdx * w / (len(hourlyData) - 1)
+
+		// Draw a prominent bright green bar for the selected hour
+		c.FillRect(x-1, 15, 1, h-25, wui.RGB(0, 255, 0))
+
+		// Draw a small readable box containing the time
+		boxX := x + 5
+		if boxX+40 > w { // Make sure the box doesn't jump off the canvas edge
+			boxX = x - 45
+		}
+		c.FillRect(boxX, 15, 40, 16, wui.RGB(0, 50, 0))
+		c.TextOut(boxX+3, 16, targetTime.Format("15:04"), wui.RGB(150, 255, 150))
 	}
 }
 
@@ -2644,7 +2838,6 @@ func createUI() {
 				saveConfig()
 				updateHourlyTable()
 				updateVerifiedTable()
-				showVerificationInputDialog(ts, v)
 			} else {
 				delete(appConfig.Verifications, ts)
 				saveConfig()
@@ -2686,14 +2879,20 @@ func createUI() {
 
 	// Verified Rainbows table
 	labelVerified := wui.NewLabel()
-	labelVerified.SetBounds(655, 255, 120, 16)
+	labelVerified.SetBounds(655, 255, 150, 16)
 	labelVerified.SetText("✅ Verified Rainbows")
 	labelVerified.SetFont(fontTable)
 	mainWindow.Add(labelVerified)
 
-	btnViewDB := wui.NewButton()
-	btnViewDB.SetBounds(840, 253, 110, 20)
-	btnViewDB.SetText("View Database")
+	btnEditDB = wui.NewButton()
+	btnEditDB.SetBounds(850, 253, 50, 20)
+	btnEditDB.SetText("Edit")
+	btnEditDB.SetOnClick(func() { showRainbowDatabaseEditor() })
+	mainWindow.Add(btnEditDB)
+
+	btnViewDB = wui.NewButton()
+	btnViewDB.SetBounds(900, 253, 50, 20)
+	btnViewDB.SetText("View")
 	btnViewDB.SetOnClick(func() { showRainbowDatabaseWindow() })
 	mainWindow.Add(btnViewDB)
 
