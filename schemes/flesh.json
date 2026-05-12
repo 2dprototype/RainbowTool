@@ -1,5 +1,6 @@
 {
     "colors": {
+        "aurora_primary": [255, 70, 100],
         "sky_day_day": [200, 90, 100],
         "sky_night": [15, 5, 12],
         "sky_sunset": [220, 60, 80],

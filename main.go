@@ -95,6 +95,7 @@ type RGBColor [3]uint8
 
 type AppConfig struct {
 	Colors struct {
+		AuroraPrimary    RGBColor   `json:"aurora_primary"`
 		SkyDayDay        RGBColor   `json:"sky_day_day"`
 		SkyNight         RGBColor   `json:"sky_night"`
 		SkySunset        RGBColor   `json:"sky_sunset"`
@@ -271,6 +272,7 @@ func initDefaultConfig() {
 	appConfig = AppConfig{
 		Verifications: make(map[string]VerificationData),
 	}
+	appConfig.Colors.AuroraPrimary = RGBColor{40, 255, 140}
 	appConfig.Colors.SkyDayDay = RGBColor{135, 206, 235}
 	appConfig.Colors.SkyNight = RGBColor{5, 5, 20}
 	appConfig.Colors.SkySunset = RGBColor{255, 140, 0}
@@ -327,6 +329,12 @@ func initDefaultConfig() {
 		{0, 255, 0}, {0, 0, 255}, {75, 0, 130}, {148, 0, 211},
 	}
 }
+
+// const poeticText = `no easter egg here, just the void...
+// the numbers speak of rain and sun,
+// but here the screen is never done.
+// searching for a date in time,
+// you found a rhythm, found a rhyme.`
 
 func loadConfig() {
 	initDefaultConfig()
@@ -1622,6 +1630,10 @@ func onMainCanvasPaint(c *wui.Canvas) {
 
 	// --- AURORA BOREALIS / AUSTRALIS ---
 	if isAurora {
+		// Define the core, fully-bright color of the aurora
+		ap := appConfig.Colors.AuroraPrimary
+		auroraR, auroraG, auroraB := float64(ap[0]), float64(ap[1]), float64(ap[2])
+
 		for i := 0; i < w; i += 3 {
 			wave1 := math.Sin(float64(i)*0.015 + float64(animFrame)*0.03)
 			wave2 := math.Sin(float64(i)*0.005 - float64(animFrame)*0.01)
@@ -1630,16 +1642,29 @@ func onMainCanvasPaint(c *wui.Canvas) {
 			if intensity > 0.1 {
 				auroraH := 40 + int(intensity*70)
 				auroraY := 80 + int(math.Sin(float64(i)*0.02)*15)
-				alphaR := uint8(math.Min(255, 30*intensity))
-				alphaG := uint8(math.Min(255, 200*intensity))
-				alphaB := uint8(math.Min(255, 120*intensity))
 				
 				for ay := 0; ay < auroraH; ay += 2 {
+					yPos := auroraY - ay
+					if yPos < 0 {
+						yPos = 0
+					}
+
+					// 1. Calculate the EXACT underlying sky color at this specific Y-coordinate
+					ratio := float64(yPos) / float64(h)
+					bgR := float64(skyR)*(1.0-ratio) + float64(horizonR)*ratio
+					bgG := float64(skyG)*(1.0-ratio) + float64(horizonG)*ratio
+					bgB := float64(skyB)*(1.0-ratio) + float64(horizonB)*ratio
+
+					// 2. Calculate the "opacity" for this pixel
 					fade := 1.0 - (float64(ay) / float64(auroraH))
-					c.FillRect(i, auroraY-ay, 3, 2, wui.RGB(
-						uint8(float64(skyR)*(1-fade) + float64(alphaR)*fade),
-						uint8(float64(skyG)*(1-fade) + float64(alphaG)*fade),
-						uint8(float64(skyB)*(1-fade) + float64(alphaB)*fade)))
+					alpha := intensity * fade // Combines wave strength and vertical fade
+
+					// 3. Manual Alpha Blending: (Background * (1 - Alpha)) + (AuroraColor * Alpha)
+					r := uint8(math.Min(255, bgR*(1.0-alpha) + auroraR*alpha))
+					g := uint8(math.Min(255, bgG*(1.0-alpha) + auroraG*alpha))
+					b := uint8(math.Min(255, bgB*(1.0-alpha) + auroraB*alpha))
+					
+					c.FillRect(i, yPos, 3, 2, wui.RGB(r, g, b))
 				}
 			}
 		}
@@ -2011,13 +2036,13 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		c.FillEllipse(cxRight+int(6*beatScale), cy-int(9*beatScale), dotR, dotR, shineColor)
 	}
 	
-	// --- POST-PROCESSING: Grunge / Film Grain ---
-	noiseBase := wuiColor(appConfig.Colors.NoiseBase)
-	for i := 0; i < 300; i++ {
-		nx := (i*73 + int(animFrame)*13) % w
-		ny := (i*97 + int(animFrame)*29) % h
-		c.FillRect(nx, ny, 1, 1, noiseBase)
-	}
+	// // --- POST-PROCESSING: Grunge / Film Grain ---
+	// noiseBase := wuiColor(appConfig.Colors.NoiseBase)
+	// for i := 0; i < 300; i++ {
+		// nx := (i*73 + int(animFrame)*13) % w
+		// ny := (i*97 + int(animFrame)*29) % h
+		// c.FillRect(nx, ny, 1, 1, noiseBase)
+	// }
 
 	info := fmt.Sprintf("%s | Temp: %.1f° | Wind: %.1f | Rain Prob: %.0f%%", targetHour.Time.Format("Mon 15:04"), temp, wind, precipProb)
 	c.TextOut(5, c.Height()-15, info, wuiColor(appConfig.Colors.InfoText))
@@ -2025,6 +2050,13 @@ func onMainCanvasPaint(c *wui.Canvas) {
 
 func onDateSearchClick() {
 	text := dateSearchEdit.Text()
+	text = strings.ToLower(text)
+	
+    if text == "egg" || text == "love" || text == "heart" {
+        showEasterEgg = !showEasterEgg // Toggle the mode
+        return
+    }
+	
 	t, err := time.Parse("02-01-2006", text)
 	if err != nil {
 		wui.MessageBox("Error", "Invalid date format. Use dd-mm-yyyy")
@@ -3308,19 +3340,16 @@ func createUI() {
 	colorCanvas.SetBounds(526, 60, 119, 15)
 	colorCanvas.SetOnPaint(onColorCanvasPaint)
 	mainWindow.Add(colorCanvas)
-
-	mainWindow.SetOnKeyDown(func(key int) {
-		fmt.Println(key)
-		if key == int(wui.KeyL) {
-			showEasterEgg = !showEasterEgg
-			if mainCanvas != nil {
-				mainCanvas.Paint()
-			}
-		}
-	})
 }
 
 func runCLI(query string) {
+
+    if query == "coffee" || query == "make-coffee" {
+        fmt.Println("Error 418: I'm a teapot.")
+        fmt.Println("I can only provide weather, not caffeine.")
+        return
+    }
+	
 	searchCityAsync(query, func(items []geocodingItem, err error) {
 		if err != nil || len(items) == 0 {
 			fmt.Printf("Error: Could not find location '%s'\n", query)
