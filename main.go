@@ -2244,7 +2244,7 @@ func showRainbowDatabaseEditor() {
 	exePath, _ := os.Executable()
 	exeDir := filepath.Dir(exePath)
 	exeName := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
-	csvPath := filepath.Join(exeDir, exeName, "db", ".csv")
+	csvPath := filepath.Join(exeDir, exeName, "db", "rainbow.csv")
 
 	var content string
 	data, err := os.ReadFile(csvPath)
@@ -2347,7 +2347,7 @@ func saveVerificationsToCSV() {
 	exeName := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
 	dbDir := filepath.Join(exeDir, exeName, "db")
 	os.MkdirAll(dbDir, 0755)
-	csvPath := filepath.Join(dbDir, ".csv")
+	csvPath := filepath.Join(dbDir, "rainbow.csv")
 
 	f, err := os.Create(csvPath)
 	if err != nil {
