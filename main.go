@@ -2120,7 +2120,7 @@ func showRainbowDatabaseWindow() {
 	exePath, _ := os.Executable()
 	exeDir := filepath.Dir(exePath)
 	exeName := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
-	csvPath := filepath.Join(exeDir, exeName, "db", ".csv")
+	csvPath := filepath.Join(exeDir, exeName, "db", "rainbow.csv")
 
 	data, err := os.ReadFile(csvPath)
 	if err == nil {
