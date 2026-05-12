@@ -144,6 +144,10 @@ type AppConfig struct {
 	} `json:"colors"`
 	Verifications map[string]VerificationData `json:"verifications"`
 	ThemeName     string                      `json:"theme_name"`
+	LastLocation  string                      `json:"last_location"`
+	LastCountry   string                      `json:"last_country"`
+	LastLat       float64                     `json:"last_lat"`
+	LastLon       float64                     `json:"last_lon"`
 }
 
 // ---------------------------------------------------------------------
@@ -381,6 +385,45 @@ func saveConfig() {
 	}
 
 	os.WriteFile(configPath, data, 0644)
+}
+
+func saveWeatherToDB(w *WeatherResponse) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	exeDir := filepath.Dir(exePath)
+	exeName := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
+	dbDir := filepath.Join(exeDir, exeName, "db")
+	os.MkdirAll(dbDir, 0755)
+
+	path := filepath.Join(dbDir, "weather.json")
+	data, err := json.MarshalIndent(w, "", "  ")
+	if err != nil {
+		return
+	}
+	os.WriteFile(path, data, 0644)
+}
+
+func loadWeatherFromDB() (*WeatherResponse, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	exeDir := filepath.Dir(exePath)
+	exeName := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
+	path := filepath.Join(exeDir, exeName, "db", "weather.json")
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var w WeatherResponse
+	if err := json.Unmarshal(data, &w); err != nil {
+		return nil, err
+	}
+	return &w, nil
 }
 
 func wuiColor(c RGBColor) wui.Color {
@@ -650,6 +693,13 @@ func fetchWeatherAsync(lat, lon float64, callback func(*WeatherResponse, error))
 
 		resp, err := http.Get(url)
 		if err != nil {
+			if w, errDB := loadWeatherFromDB(); errDB == nil {
+				if logger != nil {
+					logger.Printf("Network error, loaded cached weather: %v", err)
+				}
+				callback(w, nil)
+				return
+			}
 			callback(nil, err)
 			return
 		}
@@ -657,10 +707,18 @@ func fetchWeatherAsync(lat, lon float64, callback func(*WeatherResponse, error))
 
 		var w WeatherResponse
 		if err := json.NewDecoder(resp.Body).Decode(&w); err != nil {
+			if wDB, errDB := loadWeatherFromDB(); errDB == nil {
+				if logger != nil {
+					logger.Printf("JSON error, loaded cached weather: %v", err)
+				}
+				callback(wDB, nil)
+				return
+			}
 			callback(nil, err)
 			return
 		}
 
+		saveWeatherToDB(&w)
 		logWeatherData(&w, lat, lon, fmt.Sprintf("%.4f,%.4f", lat, lon))
 		callback(&w, nil)
 	}()
@@ -1313,6 +1371,13 @@ func updateData() {
 		if err == nil && w != nil {
 			weatherCache = w
 			timezoneOffsetHours = float64(w.UTC_Offset_Seconds) / 3600
+
+			// Save as last successful location
+			appConfig.LastLocation = locationName
+			appConfig.LastCountry = countryName
+			appConfig.LastLat = currentLat
+			appConfig.LastLon = currentLon
+			saveConfig()
 
 			updateCurrentWeather()
 			updateFeatures()
@@ -3347,6 +3412,11 @@ func runQuickMode() {
 			currentLon = lon
 			locationName = city
 			countryName = country
+		} else if appConfig.LastLocation != "" {
+			currentLat = appConfig.LastLat
+			currentLon = appConfig.LastLon
+			locationName = appConfig.LastLocation
+			countryName = appConfig.LastCountry
 		}
 		updateData()
 	})
@@ -3389,6 +3459,11 @@ func main() {
 			currentLon = lon
 			locationName = city
 			countryName = country
+		} else if appConfig.LastLocation != "" {
+			currentLat = appConfig.LastLat
+			currentLon = appConfig.LastLon
+			locationName = appConfig.LastLocation
+			countryName = appConfig.LastCountry
 		}
 		updateData()
 	})
