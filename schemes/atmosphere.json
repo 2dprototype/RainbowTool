@@ -1,252 +1,60 @@
 {
     "colors": {
-        "sky_day_day": [
-            135,
-            195,
-            235
-        ],
-        "sky_night": [
-            8,
-            12,
-            35
-        ],
-        "sky_sunset": [
-            245,
-            130,
-            70
-        ],
-        "sky_overcast": [
-            155,
-            165,
-            180
-        ],
-        "sky_storm": [
-            55,
-            60,
-            75
-        ],
-        "ground_green_1": [
-            95,
-            150,
-            80
-        ],
-        "ground_green_2": [
-            65,
-            115,
-            55
-        ],
-        "ground_snow_1": [
-            235,
-            240,
-            248
-        ],
-        "ground_snow_2": [
-            210,
-            218,
-            230
-        ],
-        "ground_desert_1": [
-            210,
-            170,
-            120
-        ],
-        "ground_desert_2": [
-            180,
-            140,
-            95
-        ],
-        "ground_storm_1": [
-            45,
-            48,
-            55
-        ],
-        "ground_storm_2": [
-            30,
-            33,
-            40
-        ],
-        "ground_autumn_1": [
-            185,
-            120,
-            60
-        ],
-        "ground_autumn_2": [
-            145,
-            85,
-            40
-        ],
-        "ground_mud": [
-            90,
-            70,
-            50
-        ],
-        "cloud_white": [
-            235,
-            240,
-            248
-        ],
-        "cloud_light_gray": [
-            190,
-            198,
-            210
-        ],
-        "cloud_dark_gray": [
-            105,
-            112,
-            125
-        ],
-        "cloud_storm": [
-            50,
-            53,
-            62
-        ],
-        "fog": [
-            180,
-            185,
-            195
-        ],
-        "rain_drop": [
-            130,
-            170,
-            210
-        ],
-        "heavy_rain": [
-            70,
-            90,
-            130
-        ],
-        "snow_drop": [
-            225,
-            232,
-            242
-        ],
-        "hail": [
-            170,
-            185,
-            200
-        ],
-        "lightning": [
-            240,
-            235,
-            160
-        ],
-        "lightning_branch": [
-            210,
-            200,
-            230
-        ],
-        "wind_line": [
-            160,
-            172,
-            190
-        ],
-        "dust": [
-            175,
-            150,
-            115
-        ],
-        "sun_inner": [
-            255,
-            225,
-            145
-        ],
-        "sun_outer": [
-            255,
-            180,
-            80
-        ],
-        "sun_haze": [
-            255,
-            240,
-            190
-        ],
-        "moon": [
-            215,
-            220,
-            235
-        ],
-        "moon_crater": [
-            180,
-            186,
-            202
-        ],
-        "star": [
-            210,
-            220,
-            245
-        ],
-        "star_bright": [
-            240,
-            245,
-            255
-        ],
+        "sky_day_day": [135, 195, 235],
+        "sky_night": [8, 12, 35],
+        "sky_sunset": [245, 130, 70],
+        "sky_sandstorm": [210, 175, 130],
+        "sky_overcast": [155, 165, 180],
+        "sky_storm": [55, 60, 75],
+        "ground_green_1": [95, 150, 80],
+        "ground_green_2": [65, 115, 55],
+        "ground_snow_1": [235, 240, 248],
+        "ground_snow_2": [210, 218, 230],
+        "ground_desert_1": [210, 170, 120],
+        "ground_desert_2": [180, 140, 95],
+        "ground_storm_1": [45, 48, 55],
+        "ground_storm_2": [30, 33, 40],
+        "ground_autumn_1": [185, 120, 60],
+        "ground_autumn_2": [145, 85, 40],
+        "ground_spring_1": [120, 175, 90],
+        "ground_spring_2": [85, 140, 60],
+        "ground_winter_1": [220, 228, 240],
+        "ground_winter_2": [195, 205, 220],
+        "cloud_white": [235, 240, 248],
+        "cloud_light_gray": [190, 198, 210],
+        "cloud_dark_gray": [105, 112, 125],
+        "cloud_storm": [50, 53, 62],
+        "cloud_sandstorm": [195, 165, 120],
+        "rain_drop": [130, 170, 210],
+        "snow_drop": [225, 232, 242],
+        "lightning": [240, 235, 160],
+        "wind_line": [160, 172, 190],
+        "sun_inner": [255, 225, 145],
+        "sun_outer": [255, 180, 80],
+        "moon": [215, 220, 235],
+        "moon_crater": [180, 186, 202],
+        "star": [210, 220, 245],
+        "canvas_background": [12, 15, 25],
+        "sand_particle": [195, 160, 110],
+        "leaf_color_1": [95, 155, 80],
+        "leaf_color_2": [120, 175, 90],
+        "leaf_color_3": [140, 190, 100],
+        "blossom_color": [245, 175, 190],
+        "firefly_color": [220, 240, 130],
+        "frost_color": [200, 215, 232],
+        "heart_depth": [180, 50, 60],
+        "heart_main": [220, 60, 70],
+        "heart_shine": [255, 150, 170],
+        "noise_base": [18, 20, 30],
+        "info_text": [200, 210, 225],
         "rainbow_colors": [
-            [
-                220,
-                55,
-                55
-            ],
-            [
-                235,
-                140,
-                35
-            ],
-            [
-                240,
-                215,
-                45
-            ],
-            [
-                45,
-                195,
-                85
-            ],
-            [
-                40,
-                155,
-                225
-            ],
-            [
-                90,
-                55,
-                200
-            ],
-            [
-                195,
-                50,
-                155
-            ]
-        ],
-        "horizon_haze": [
-            175,
-            185,
-            200
-        ],
-        "water_reflection": [
-            100,
-            145,
-            185
-        ],
-        "wet_asphalt": [
-            55,
-            58,
-            65
-        ],
-        "frost": [
-            200,
-            215,
-            232
-        ],
-        "dew": [
-            185,
-            210,
-            195
-        ],
-        "canvas_background": [
-            12,
-            15,
-            25
+            [220, 55, 55],
+            [235, 140, 35],
+            [240, 215, 45],
+            [45, 195, 85],
+            [40, 155, 225],
+            [90, 55, 200],
+            [195, 50, 155]
         ]
-    },
-    "verifications": {}
+    }
 }

@@ -1,168 +1,58 @@
 {
     "colors": {
-        "sky_day_day": [
-            135,
-            215,
-            255
-        ],
-        "sky_night": [
-            8,
-            12,
-            28
-        ],
-        "sky_sunset": [
-            255,
-            95,
-            55
-        ],
-        "ground_green_1": [
-            88,
-            200,
-            92
-        ],
-        "ground_green_2": [
-            46,
-            130,
-            50
-        ],
-        "ground_snow_1": [
-            252,
-            252,
-            255
-        ],
-        "ground_snow_2": [
-            242,
-            244,
-            250
-        ],
-        "ground_desert_1": [
-            250,
-            210,
-            160
-        ],
-        "ground_desert_2": [
-            225,
-            175,
-            120
-        ],
-        "ground_storm_1": [
-            55,
-            80,
-            55
-        ],
-        "ground_storm_2": [
-            40,
-            55,
-            40
-        ],
-        "cloud_white": [
-            255,
-            255,
-            253
-        ],
-        "cloud_light_gray": [
-            218,
-            222,
-            228
-        ],
-        "cloud_dark_gray": [
-            105,
-            110,
-            118
-        ],
-        "cloud_storm": [
-            55,
-            55,
-            72
-        ],
-        "rain_drop": [
-            100,
-            170,
-            235
-        ],
-        "snow_drop": [
-            255,
-            255,
-            250
-        ],
-        "lightning": [
-            255,
-            240,
-            80
-        ],
-        "wind_line": [
-            195,
-            202,
-            212
-        ],
-        "sun_inner": [
-            255,
-            225,
-            60
-        ],
-        "sun_outer": [
-            255,
-            240,
-            120
-        ],
-        "moon": [
-            235,
-            240,
-            252
-        ],
-        "moon_crater": [
-            200,
-            208,
-            225
-        ],
-        "star": [
-            255,
-            250,
-            195
-        ],
-        "canvas_background": [
-            230,
-            235,
-            240
-        ],
+        "sky_day_day": [135, 215, 255],
+        "sky_night": [8, 12, 28],
+        "sky_sunset": [255, 95, 55],
+        "sky_sandstorm": [240, 195, 140],
+        "ground_green_1": [88, 200, 92],
+        "ground_green_2": [46, 130, 50],
+        "ground_snow_1": [252, 252, 255],
+        "ground_snow_2": [242, 244, 250],
+        "ground_desert_1": [250, 210, 160],
+        "ground_desert_2": [225, 175, 120],
+        "ground_storm_1": [55, 80, 55],
+        "ground_storm_2": [40, 55, 40],
+        "ground_autumn_1": [235, 145, 65],
+        "ground_autumn_2": [205, 115, 40],
+        "ground_spring_1": [110, 225, 110],
+        "ground_spring_2": [75, 195, 78],
+        "ground_winter_1": [250, 250, 252],
+        "ground_winter_2": [240, 242, 248],
+        "cloud_white": [255, 255, 253],
+        "cloud_light_gray": [218, 222, 228],
+        "cloud_dark_gray": [105, 110, 118],
+        "cloud_storm": [55, 55, 72],
+        "cloud_sandstorm": [238, 198, 145],
+        "rain_drop": [100, 170, 235],
+        "snow_drop": [255, 255, 250],
+        "lightning": [255, 240, 80],
+        "wind_line": [195, 202, 212],
+        "sun_inner": [255, 225, 60],
+        "sun_outer": [255, 240, 120],
+        "moon": [235, 240, 252],
+        "moon_crater": [200, 208, 225],
+        "star": [255, 250, 195],
+        "canvas_background": [230, 235, 240],
+        "sand_particle": [240, 195, 140],
+        "leaf_color_1": [88, 200, 92],
+        "leaf_color_2": [110, 225, 110],
+        "leaf_color_3": [135, 240, 130],
+        "blossom_color": [255, 190, 180],
+        "firefly_color": [255, 248, 130],
+        "frost_color": [250, 250, 250],
+        "heart_depth": [220, 50, 45],
+        "heart_main": [255, 65, 60],
+        "heart_shine": [255, 165, 155],
+        "noise_base": [232, 237, 242],
+        "info_text": [90, 95, 100],
         "rainbow_colors": [
-            [
-                255,
-                55,
-                45
-            ],
-            [
-                255,
-                165,
-                50
-            ],
-            [
-                255,
-                230,
-                55
-            ],
-            [
-                55,
-                195,
-                85
-            ],
-            [
-                50,
-                120,
-                240
-            ],
-            [
-                140,
-                75,
-                220
-            ],
-            [
-                235,
-                80,
-                185
-            ]
+            [255, 55, 45],
+            [255, 165, 50],
+            [255, 230, 55],
+            [55, 195, 85],
+            [50, 120, 240],
+            [140, 75, 220],
+            [235, 80, 185]
         ]
-    },
-    "verifications": {
     }
 }

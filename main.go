@@ -13,7 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	"github.com/2dprototype/wui"
+	"github.com/gonutz/w32/v2"
 )
 
 // ---------------------------------------------------------------------
@@ -96,6 +98,7 @@ type AppConfig struct {
 		SkyDayDay        RGBColor   `json:"sky_day_day"`
 		SkyNight         RGBColor   `json:"sky_night"`
 		SkySunset        RGBColor   `json:"sky_sunset"`
+		SkySandstorm     RGBColor   `json:"sky_sandstorm"`
 		GroundGreen1     RGBColor   `json:"ground_green_1"`
 		GroundGreen2     RGBColor   `json:"ground_green_2"`
 		GroundSnow1      RGBColor   `json:"ground_snow_1"`
@@ -104,10 +107,17 @@ type AppConfig struct {
 		GroundDesert2    RGBColor   `json:"ground_desert_2"`
 		GroundStorm1     RGBColor   `json:"ground_storm_1"`
 		GroundStorm2     RGBColor   `json:"ground_storm_2"`
+		GroundAutumn1    RGBColor   `json:"ground_autumn_1"`
+		GroundAutumn2    RGBColor   `json:"ground_autumn_2"`
+		GroundSpring1    RGBColor   `json:"ground_spring_1"`
+		GroundSpring2    RGBColor   `json:"ground_spring_2"`
+		GroundWinter1    RGBColor   `json:"ground_winter_1"`
+		GroundWinter2    RGBColor   `json:"ground_winter_2"`
 		CloudWhite       RGBColor   `json:"cloud_white"`
 		CloudLightGray   RGBColor   `json:"cloud_light_gray"`
 		CloudDarkGray    RGBColor   `json:"cloud_dark_gray"`
 		CloudStorm       RGBColor   `json:"cloud_storm"`
+		CloudSandstorm   RGBColor   `json:"cloud_sandstorm"`
 		RainDrop         RGBColor   `json:"rain_drop"`
 		SnowDrop         RGBColor   `json:"snow_drop"`
 		Lightning        RGBColor   `json:"lightning"`
@@ -118,6 +128,18 @@ type AppConfig struct {
 		MoonCrater       RGBColor   `json:"moon_crater"`
 		Star             RGBColor   `json:"star"`
 		CanvasBackground RGBColor   `json:"canvas_background"`
+		SandParticle     RGBColor   `json:"sand_particle"`
+		LeafColor1       RGBColor   `json:"leaf_color_1"`
+		LeafColor2       RGBColor   `json:"leaf_color_2"`
+		LeafColor3       RGBColor   `json:"leaf_color_3"`
+		BlossomColor     RGBColor   `json:"blossom_color"`
+		FireflyColor     RGBColor   `json:"firefly_color"`
+		FrostColor       RGBColor   `json:"frost_color"`
+		HeartDepth       RGBColor   `json:"heart_depth"`
+		HeartMain        RGBColor   `json:"heart_main"`
+		HeartShine       RGBColor   `json:"heart_shine"`
+		NoiseBase        RGBColor   `json:"noise_base"`
+		InfoText         RGBColor   `json:"info_text"`
 		RainbowColors    []RGBColor `json:"rainbow_colors"`
 	} `json:"colors"`
 	Verifications map[string]VerificationData `json:"verifications"`
@@ -131,10 +153,10 @@ var (
 	mainWindow *wui.Window
 
 	// header
-	searchEdit    *wui.EditLine
-	searchCombo   *wui.ComboBox
-	searchItems   []geocodingItem
-	btnGeo        *wui.Button
+	searchEdit  *wui.EditLine
+	searchCombo *wui.ComboBox
+	searchItems []geocodingItem
+	btnGeo      *wui.Button
 
 	// current weather
 	labelMainTemp  *wui.Label
@@ -206,6 +228,9 @@ var (
 	analysisCombo *wui.ComboBox
 	btnEditDB     *wui.Button
 	btnViewDB     *wui.Button
+
+	// easter egg
+	showEasterEgg bool
 )
 
 type geocodingItem struct {
@@ -245,6 +270,8 @@ func initDefaultConfig() {
 	appConfig.Colors.SkyDayDay = RGBColor{135, 206, 235}
 	appConfig.Colors.SkyNight = RGBColor{5, 5, 20}
 	appConfig.Colors.SkySunset = RGBColor{255, 140, 0}
+	appConfig.Colors.SkySandstorm = RGBColor{210, 160, 100}
+	
 	appConfig.Colors.GroundGreen1 = RGBColor{34, 139, 34}
 	appConfig.Colors.GroundGreen2 = RGBColor{46, 139, 87}
 	appConfig.Colors.GroundSnow1 = RGBColor{240, 248, 255}
@@ -253,10 +280,19 @@ func initDefaultConfig() {
 	appConfig.Colors.GroundDesert2 = RGBColor{210, 180, 140}
 	appConfig.Colors.GroundStorm1 = RGBColor{25, 100, 25}
 	appConfig.Colors.GroundStorm2 = RGBColor{35, 100, 50}
+	appConfig.Colors.GroundAutumn1 = RGBColor{160, 82, 45}  
+	appConfig.Colors.GroundAutumn2 = RGBColor{205, 133, 63} 
+	appConfig.Colors.GroundSpring1 = RGBColor{50, 205, 50}  
+	appConfig.Colors.GroundSpring2 = RGBColor{34, 139, 34}  
+	appConfig.Colors.GroundWinter1 = RGBColor{107, 142, 35} 
+	appConfig.Colors.GroundWinter2 = RGBColor{85, 107, 47}  
+
 	appConfig.Colors.CloudWhite = RGBColor{255, 255, 255}
 	appConfig.Colors.CloudLightGray = RGBColor{200, 200, 200}
 	appConfig.Colors.CloudDarkGray = RGBColor{100, 100, 100}
 	appConfig.Colors.CloudStorm = RGBColor{50, 50, 60}
+	appConfig.Colors.CloudSandstorm = RGBColor{190, 150, 100}
+	
 	appConfig.Colors.RainDrop = RGBColor{150, 150, 200}
 	appConfig.Colors.SnowDrop = RGBColor{255, 255, 255}
 	appConfig.Colors.Lightning = RGBColor{255, 255, 0}
@@ -267,6 +303,21 @@ func initDefaultConfig() {
 	appConfig.Colors.MoonCrater = RGBColor{170, 170, 190}
 	appConfig.Colors.Star = RGBColor{255, 255, 255}
 	appConfig.Colors.CanvasBackground = RGBColor{200, 200, 200}
+	
+	// New Element & Easter Egg Colors
+	appConfig.Colors.SandParticle = RGBColor{190, 140, 70}
+	appConfig.Colors.LeafColor1 = RGBColor{210, 105, 30}
+	appConfig.Colors.LeafColor2 = RGBColor{178, 34, 34}
+	appConfig.Colors.LeafColor3 = RGBColor{205, 133, 63}
+	appConfig.Colors.BlossomColor = RGBColor{255, 182, 193}
+	appConfig.Colors.FireflyColor = RGBColor{200, 255, 50}
+	appConfig.Colors.FrostColor = RGBColor{200, 220, 255}
+	appConfig.Colors.HeartDepth = RGBColor{150, 10, 30}
+	appConfig.Colors.HeartMain = RGBColor{240, 45, 65}
+	appConfig.Colors.HeartShine = RGBColor{255, 160, 170}
+	appConfig.Colors.NoiseBase = RGBColor{20, 20, 25}
+	appConfig.Colors.InfoText = RGBColor{255, 255, 255}
+
 	appConfig.Colors.RainbowColors = []RGBColor{
 		{255, 0, 0}, {255, 127, 0}, {255, 255, 0},
 		{0, 255, 0}, {0, 0, 255}, {75, 0, 130}, {148, 0, 211},
@@ -274,6 +325,8 @@ func initDefaultConfig() {
 }
 
 func loadConfig() {
+	initDefaultConfig()
+	
 	exePath, err := os.Executable()
 	if err != nil {
 		initDefaultConfig()
@@ -1405,6 +1458,7 @@ func onMainCanvasPaint(c *wui.Canvas) {
 
 	sunElev := getSolarElevationUTC(lat, lon, targetHour.Time.Add(-time.Duration(tzOff)*time.Hour))
 
+	// Base conditions
 	isFog := code == 45 || code == 48
 	isDrizzle := (code >= 51 && code <= 57)
 	isRain := (code >= 61 && code <= 67) || (code >= 80 && code <= 82)
@@ -1414,6 +1468,21 @@ func onMainCanvasPaint(c *wui.Canvas) {
 	isPrecipitating := isDrizzle || isRain || isSnow || isHail
 	isBlizzard := isSnow && wind > 30
 
+	// Geography & Seasonal effects
+	month := targetHour.Time.Month()
+	isNorthernHemi := lat >= 0
+	
+	isSpring := (isNorthernHemi && month >= 3 && month <= 5) || (!isNorthernHemi && month >= 9 && month <= 11)
+	isAutumn := (isNorthernHemi && month >= 9 && month <= 11) || (!isNorthernHemi && month >= 3 && month <= 5)
+	isWinter := (isNorthernHemi && (month == 12 || month <= 2)) || (!isNorthernHemi && month >= 6 && month <= 8)
+	isSummer := (isNorthernHemi && month >= 6 && month <= 8) || (!isNorthernHemi && (month == 12 || month <= 2))
+
+	isDesert := temp > 30 && humidity < 30
+	isSandstorm := isDesert && wind > 25
+	isHeatHaze := temp >= 35 && sunElev > 10 && !isPrecipitating
+	isAurora := sunElev < -10 && math.Abs(lat) > 55 && cloudCover < 30 && !isPrecipitating && !isSandstorm
+	isSummerNight := isSummer && sunElev < -5 && temp > 15 && wind < 15 && !isPrecipitating
+
 	rainbowScore := 0
 	hourlyDataArr := []HourlyData{targetHour}
 	preds := predictRainbow(hourlyDataArr, lat, lon, tzOff, true)
@@ -1421,20 +1490,34 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		rainbowScore = preds[0].Score
 	}
 
+	// Dynamic ground colors
 	groundColor1 := wuiColor(appConfig.Colors.GroundGreen1)
 	groundColor2 := wuiColor(appConfig.Colors.GroundGreen2)
 
 	if temp < 0 || isSnow {
 		groundColor1 = wuiColor(appConfig.Colors.GroundSnow1)
 		groundColor2 = wuiColor(appConfig.Colors.GroundSnow2)
-	} else if temp > 30 && humidity < 30 {
+	} else if isDesert {
 		groundColor1 = wuiColor(appConfig.Colors.GroundDesert1)
 		groundColor2 = wuiColor(appConfig.Colors.GroundDesert2)
 	} else if isRain || isThunderstorm {
 		groundColor1 = wuiColor(appConfig.Colors.GroundStorm1)
 		groundColor2 = wuiColor(appConfig.Colors.GroundStorm2)
+	} else {
+		// Seasonal flora colors from config
+		if isAutumn {
+			groundColor1 = wuiColor(appConfig.Colors.GroundAutumn1)
+			groundColor2 = wuiColor(appConfig.Colors.GroundAutumn2)
+		} else if isSpring {
+			groundColor1 = wuiColor(appConfig.Colors.GroundSpring1)
+			groundColor2 = wuiColor(appConfig.Colors.GroundSpring2)
+		} else if isWinter && temp >= 0 {
+			groundColor1 = wuiColor(appConfig.Colors.GroundWinter1)
+			groundColor2 = wuiColor(appConfig.Colors.GroundWinter2)
+		}
 	}
 
+	// Sky colors
 	skyColor := appConfig.Colors.SkyDayDay
 	if sunElev < -5 {
 		skyColor = appConfig.Colors.SkyNight
@@ -1443,7 +1526,7 @@ func onMainCanvasPaint(c *wui.Canvas) {
 	}
 
 	cloudDarken := float64(cloudCover * 0.8)
-	if isThunderstorm || isBlizzard {
+	if isThunderstorm || isBlizzard || isSandstorm {
 		cloudDarken = 100
 	}
 
@@ -1451,14 +1534,19 @@ func onMainCanvasPaint(c *wui.Canvas) {
 	skyG := math.Max(0, float64(skyColor[1])-cloudDarken)
 	skyB := math.Max(0, float64(skyColor[2])-cloudDarken)
 
+	// Overrides
 	if isThunderstorm && (animFrame%30 == 0 || animFrame%30 == 1) {
 		skyR, skyG, skyB = 255, 255, 255
+	} else if isSandstorm {
+		ss := appConfig.Colors.SkySandstorm
+		skyR, skyG, skyB = float64(ss[0]), float64(ss[1]), float64(ss[2])
 	}
 
 	horizonR := math.Min(255, skyR+50)
 	horizonG := math.Min(255, skyG+50)
 	horizonB := math.Min(255, skyB+50)
 
+	// Draw Sky
 	for y := 0; y < h; y += 4 {
 		ratio := float64(y) / float64(h)
 		r := uint8(skyR*(1-ratio) + horizonR*ratio)
@@ -1467,15 +1555,52 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		c.FillRect(0, y, w, 4, wui.RGB(r, g, b))
 	}
 
-	if sunElev < -5 && cloudCover < 50 && !isFog {
+	// --- AURORA BOREALIS / AUSTRALIS ---
+	if isAurora {
+		for i := 0; i < w; i += 3 {
+			wave1 := math.Sin(float64(i)*0.015 + float64(animFrame)*0.03)
+			wave2 := math.Sin(float64(i)*0.005 - float64(animFrame)*0.01)
+			intensity := math.Max(0, wave1*wave2)
+			
+			if intensity > 0.1 {
+				auroraH := 40 + int(intensity*70)
+				auroraY := 80 + int(math.Sin(float64(i)*0.02)*15)
+				alphaR := uint8(math.Min(255, 30*intensity))
+				alphaG := uint8(math.Min(255, 200*intensity))
+				alphaB := uint8(math.Min(255, 120*intensity))
+				
+				for ay := 0; ay < auroraH; ay += 2 {
+					fade := 1.0 - (float64(ay) / float64(auroraH))
+					c.FillRect(i, auroraY-ay, 3, 2, wui.RGB(
+						uint8(float64(skyR)*(1-fade) + float64(alphaR)*fade),
+						uint8(float64(skyG)*(1-fade) + float64(alphaG)*fade),
+						uint8(float64(skyB)*(1-fade) + float64(alphaB)*fade)))
+				}
+			}
+		}
+	}
+
+	// Stars & Shooting Stars
+	if sunElev < -5 && cloudCover < 50 && !isFog && !isSandstorm {
 		starColor := wuiColor(appConfig.Colors.Star)
 		c.FillRect(20, 20, 2, 2, starColor)
 		c.FillRect(120, 30, 2, 2, starColor)
 		c.FillRect(200, 15, 2, 2, starColor)
 		c.FillRect(350, 40, 2, 2, starColor)
+		
+		seed := int(animFrame / 150)
+		if (seed * 17) % 10 == 0 { 
+			starProg := float64(animFrame % 150)
+			if starProg < 20 {
+				sx := int((seed * 31) % w) - int(starProg*15)
+				sy := int((seed * 47) % (h/2)) + int(starProg*5)
+				c.Line(sx, sy, sx+15, sy-7, starColor)
+			}
+		}
 	}
 
-	if !isBlizzard {
+	// Sun / Moon
+	if !isBlizzard && !isSandstorm {
 		sunX := 40
 		sunY := h - 40 - int(sunElev*2)
 		if sunY > h {
@@ -1496,6 +1621,7 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		}
 	}
 
+	// Clouds
 	if cloudCover > 10 {
 		cloudColor := wuiColor(appConfig.Colors.CloudWhite)
 		if cloudCover > 50 {
@@ -1506,10 +1632,12 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		}
 		if isThunderstorm || isBlizzard {
 			cloudColor = wuiColor(appConfig.Colors.CloudStorm)
+		} else if isSandstorm {
+			cloudColor = wuiColor(appConfig.Colors.CloudSandstorm)
 		}
 
 		numClouds := int(cloudCover / 10)
-		if isBlizzard {
+		if isBlizzard || isSandstorm {
 			numClouds = 10
 		}
 
@@ -1551,9 +1679,50 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		}
 	}
 
+	// Draw Ground
 	c.FillEllipse(-50, h-40, w/2+100, 100, groundColor1)
 	c.FillEllipse(w/2-50, h-60, w/2+100, 150, groundColor2)
+	
+	// Ground snow accumulation details
+	if isSnow || (isWinter && temp < 0) {
+		snowD := wuiColor(appConfig.Colors.GroundSnow2)
+		for i := 0; i < w; i += 30 {
+			c.Line(i, h-20+(i%10), i+15, h-20+(i%10), snowD)
+			c.Line(i+5, h-40+(i%15), i+20, h-40+(i%15), snowD)
+		}
+	}
 
+	// --- HEAT HAZE (Mirage) ---
+	if isHeatHaze {
+		hazeColor := wui.RGB(uint8(horizonR), uint8(horizonG), uint8(horizonB))
+		for i := 0; i < w; i += 10 {
+			shimmer := int(math.Sin(float64(animFrame)*0.2 + float64(i)*0.5) * 3)
+			c.Line(i, h-45+shimmer, i+8, h-45+shimmer, hazeColor)
+		}
+	}
+
+	// --- WINTER FROST EDGES ---
+	if temp <= 0 && !isSandstorm {
+		frostColor := wuiColor(appConfig.Colors.FrostColor)
+		intensity := int(math.Min(12, math.Abs(temp))) // Colder = further reach
+		if intensity > 2 {
+			for i := 0; i < w; i += 12 {
+				if i < 60 || i > w-60 { // Creep from left/right edges
+					lenTop := 3 + (i%5)*intensity/3
+					lenBot := 3 + ((i+2)%5)*intensity/3
+					c.Line(i, 0, i+int(math.Sin(float64(i))*3), lenTop, frostColor) 
+					c.Line(i, h, i+int(math.Cos(float64(i))*3), h-lenBot, frostColor) 
+				}
+			}
+			for y := 0; y < h; y += 12 {
+				lenSide := 3 + (y%5)*intensity/3
+				c.Line(0, y, lenSide, y+int(math.Sin(float64(y))*3), frostColor) 
+				c.Line(w, y, w-lenSide, y+int(math.Cos(float64(y))*3), frostColor) 
+			}
+		}
+	}
+
+	// Fog
 	if isFog {
 		fogColor := wuiColor(appConfig.Colors.CloudLightGray)
 		for i := 0; i < 6; i++ {
@@ -1566,6 +1735,7 @@ func onMainCanvasPaint(c *wui.Canvas) {
 
 	windOffset := int(wind / 3)
 
+	// --- PRECIPITATION ---
 	if isPrecipitating {
 		dropColor := wuiColor(appConfig.Colors.RainDrop)
 		numDrops := 40
@@ -1595,19 +1765,22 @@ func onMainCanvasPaint(c *wui.Canvas) {
 			x := (i * 67) % w
 
 			if isSnow {
+				flakeSize := (i % 2) + 2
+				if isBlizzard {
+					flakeSize = 1 + (i % 2)
+				}
+				
 				fallSpeed := (i%2 + 1) * 2
 				if isBlizzard {
 					fallSpeed = (i%3 + 3) * 3
 				}
 
 				y := (i*17 + int(animFrame)*fallSpeed) % h
-				drift := int(math.Sin(float64(animFrame)*0.05+float64(i))*10) + int(wind)
+				
+				driftFactor := 2.0 / float64(flakeSize)
+				drift := int(math.Sin(float64(animFrame)*0.05+float64(i))*15*driftFactor) + int(wind*driftFactor)
 				x = (x + drift + w) % w
 
-				flakeSize := (i % 2) + 2
-				if isBlizzard {
-					flakeSize = 1 + (i % 2)
-				}
 				c.FillRect(x, y, flakeSize, flakeSize, dropColor)
 
 			} else if isHail {
@@ -1616,7 +1789,7 @@ func onMainCanvasPaint(c *wui.Canvas) {
 				x = (x + windOffset + w) % w
 				c.FillEllipse(x, y, 4, 4, dropColor)
 
-			} else {
+			} else { 
 				fallSpeed := (i%3 + 3) * 5
 				length := fallSpeed
 
@@ -1631,10 +1804,8 @@ func onMainCanvasPaint(c *wui.Canvas) {
 				y := (i*23 + int(animFrame)*fallSpeed) % h
 				x = (x + windOffset + w) % w
 
-				// --- COLLISION PHYSICS: Ground Splashes ---
-				splashY := h - 30 + (i % 15) // Dynamic ground depth
+				splashY := h - 30 + (i % 15)
 				if y+length >= splashY {
-					// Draw tiny V-shape water splash
 					c.Line(x, splashY, x-3, splashY-4, wuiColor(appConfig.Colors.CloudLightGray))
 					c.Line(x, splashY, x+2, splashY-3, wuiColor(appConfig.Colors.CloudLightGray))
 				} else {
@@ -1644,6 +1815,59 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		}
 	}
 
+	// --- ENHANCED SANDSTORM PARTICLES (Parallax Layers) ---
+	if isSandstorm {
+		sandColor := wuiColor(appConfig.Colors.SandParticle)
+		for layer := 1; layer <= 3; layer++ {
+			numParticles := 60 * layer
+			speed := wind * float64(layer) * 0.25 
+			for i := 0; i < numParticles; i++ {
+				dx := (i*53*layer + int(float64(animFrame)*speed)) % w
+				dy := (i*29*layer + int(math.Sin(float64(animFrame)*0.05+float64(i))*float64(4*layer))) % h
+				length := 1 + layer
+				c.Line(dx, dy, dx+length, dy, sandColor)
+			}
+		}
+	}
+
+	// --- SEASONAL NATURE PARTICLES ---
+	if !isPrecipitating && wind > 5 && !isSandstorm {
+		if isAutumn {
+			leafColors := []wui.Color{
+				wuiColor(appConfig.Colors.LeafColor1), 
+				wuiColor(appConfig.Colors.LeafColor2), 
+				wuiColor(appConfig.Colors.LeafColor3),
+			}
+			for i := 0; i < 15; i++ {
+				lx := (i*83 + int(animFrame)*int(wind/2)) % w
+				ly := (i*37 + int(animFrame)*2 + int(math.Sin(float64(animFrame)*0.1+float64(i))*15)) % h
+				c.FillRect(lx, ly, 3, 2, leafColors[i%3])
+			}
+		} else if isSpring {
+			blossomColor := wuiColor(appConfig.Colors.BlossomColor)
+			for i := 0; i < 10; i++ {
+				lx := (i*83 + int(animFrame)*int(wind/3)) % w
+				ly := (i*37 + int(animFrame)*1 + int(math.Sin(float64(animFrame)*0.05+float64(i))*5)) % h
+				c.FillRect(lx, ly, 2, 2, blossomColor)
+			}
+		}
+	}
+
+	// --- SUMMER NIGHT FIREFLIES ---
+	if isSummerNight {
+		fireflyColor := wuiColor(appConfig.Colors.FireflyColor)
+		for i := 0; i < 20; i++ {
+			fx := (w/4) + (i*47)%(w/2) + int(math.Sin(float64(animFrame)*0.02+float64(i))*30)
+			fy := h - 40 - (i*13)%60 + int(math.Cos(float64(animFrame)*0.015+float64(i))*20)
+			
+			blink := math.Sin(float64(animFrame)*0.05 + float64(i))
+			if blink > 0.5 {
+				c.FillRect(fx, fy, 2, 2, fireflyColor)
+			}
+		}
+	}
+
+	// --- LIGHTNING ---
 	if isThunderstorm {
 		if animFrame%30 == 0 || animFrame%30 == 1 {
 			lightningColor := wuiColor(appConfig.Colors.Lightning)
@@ -1658,7 +1882,8 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		}
 	}
 
-	if wind > 20 && !isSnow {
+	// --- WIND LINES ---
+	if wind > 20 && !isSnow && !isSandstorm {
 		windColor := wuiColor(appConfig.Colors.WindLine)
 		offset1 := (int(animFrame) * int(wind/4)) % w
 		offset2 := (int(animFrame) * int(wind/3)) % w
@@ -1666,8 +1891,63 @@ func onMainCanvasPaint(c *wui.Canvas) {
 		c.Line((offset2+w/2)%w, h-80, (offset2+w/2)%w+40, h-80, windColor)
 	}
 
+	// --- EASTER EGG: Floating Heart ---
+	if showEasterEgg {
+		hx := w / 2
+		baseHy := h / 2
+
+		floatOffset := int(math.Sin(float64(animFrame)*0.08) * 12)
+		hy := baseHy + floatOffset
+
+		beatScale := 1.0 + math.Max(0.0, math.Sin(float64(animFrame)*0.2))*0.15
+
+		rFloat := 18.0 * beatScale
+		r := int(rFloat)
+		size := r * 2
+		offsetX := int(12.0 * beatScale)
+
+		cxLeft := hx - offsetX
+		cxRight := hx + offsetX
+		cy := hy - int(5.0*beatScale)
+
+		tangentOffset := int(12.7 * beatScale)
+		polyY := cy + tangentOffset
+		polyLeftX := cxLeft - tangentOffset
+		polyRightX := cxRight + tangentOffset
+		tipY := cy + int(37.4*beatScale)
+
+		depthColor := wuiColor(appConfig.Colors.HeartDepth)
+		heartColor := wuiColor(appConfig.Colors.HeartMain)
+		shineColor := wuiColor(appConfig.Colors.HeartShine)
+
+		depthOffset := int(3.0 * beatScale)
+
+		c.FillEllipse(cxLeft-r, cy-r+depthOffset, size, size, depthColor)
+		c.FillEllipse(cxRight-r, cy-r+depthOffset, size, size, depthColor)
+		c.Polygon([]wui.Point{
+			{int32(polyLeftX), int32(polyY + depthOffset)},
+			{int32(polyRightX), int32(polyY + depthOffset)},
+			{int32(hx), int32(tipY + depthOffset)},
+		}, depthColor)
+
+		c.FillEllipse(cxLeft-r, cy-r, size, size, heartColor)
+		c.FillEllipse(cxRight-r, cy-r, size, size, heartColor)
+		c.Polygon([]wui.Point{
+			{int32(polyLeftX), int32(polyY)},
+			{int32(polyRightX), int32(polyY)},
+			{int32(hx), int32(tipY)},
+		}, heartColor)
+
+		shineR := int(14.0 * beatScale)
+		c.FillEllipse(cxLeft-shineR+int(2*beatScale), cy-shineR-int(1*beatScale), shineR, shineR, shineColor)
+		c.FillEllipse(cxLeft-shineR+int(5*beatScale), cy-shineR+int(2*beatScale), shineR, shineR, heartColor)
+
+		dotR := int(6.0 * beatScale)
+		c.FillEllipse(cxRight+int(6*beatScale), cy-int(9*beatScale), dotR, dotR, shineColor)
+	}
+	
 	// --- POST-PROCESSING: Grunge / Film Grain ---
-	noiseBase := wui.RGB(20, 20, 25)
+	noiseBase := wuiColor(appConfig.Colors.NoiseBase)
 	for i := 0; i < 300; i++ {
 		nx := (i*73 + int(animFrame)*13) % w
 		ny := (i*97 + int(animFrame)*29) % h
@@ -1675,7 +1955,7 @@ func onMainCanvasPaint(c *wui.Canvas) {
 	}
 
 	info := fmt.Sprintf("%s | Temp: %.1f° | Wind: %.1f | Rain Prob: %.0f%%", targetHour.Time.Format("Mon 15:04"), temp, wind, precipProb)
-	c.TextOut(5, c.Height()-15, info, wui.RGB(255, 255, 255))
+	c.TextOut(5, c.Height()-15, info, wuiColor(appConfig.Colors.InfoText))
 }
 
 func onDateSearchClick() {
@@ -1823,24 +2103,24 @@ func showRainbowDatabaseWindow() {
 	}
 
 	// table.SetOnSelectionChange(func() {
-		// selectedRow := table.SelectedRow()
-		// if selectedRow < 0 {
-			// return
-		// }
+	// selectedRow := table.SelectedRow()
+	// if selectedRow < 0 {
+	// return
+	// }
 
-		// // Find the verification data corresponding to this row
-		// var list []VerificationData
-		// for _, v := range appConfig.Verifications {
-			// list = append(list, v)
-		// }
-		// sort.Slice(list, func(i, j int) bool {
-			// return list[i].Timestamp > list[j].Timestamp
-		// })
+	// // Find the verification data corresponding to this row
+	// var list []VerificationData
+	// for _, v := range appConfig.Verifications {
+	// list = append(list, v)
+	// }
+	// sort.Slice(list, func(i, j int) bool {
+	// return list[i].Timestamp > list[j].Timestamp
+	// })
 
-		// if selectedRow < len(list) {
-			// v := list[selectedRow]
-			// fmt.Println(v)
-		// }
+	// if selectedRow < len(list) {
+	// v := list[selectedRow]
+	// fmt.Println(v)
+	// }
 	// })
 
 	dbWindow.ShowModal()
@@ -1897,7 +2177,7 @@ func showRainbowDatabaseEditor() {
 	// First normalize any existing \r\n to \n, then replace all \n with \r\n
 	content = strings.ReplaceAll(content, "\r\n", "\n")
 	content = strings.ReplaceAll(content, "\n", "\r\n")
-	
+
 	textEdit.SetText(content)
 
 	btnSave := wui.NewButton()
@@ -1907,7 +2187,7 @@ func showRainbowDatabaseEditor() {
 		newContent := textEdit.Text()
 		// Normalize line endings back: replace \r\n with \n for storage
 		newContent = strings.ReplaceAll(newContent, "\r\n", "\n")
-		
+
 		// Save to file
 		os.MkdirAll(filepath.Dir(csvPath), 0755)
 		err := os.WriteFile(csvPath, []byte(newContent), 0644)
@@ -2168,13 +2448,13 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 		c.Line(0, y+10, w, y+10, gridColor)
 		// Y-axis context labels
 		// if i == 0 {
-			// c.TextOut(w-35, y+12, "Max", textColor)
+		// c.TextOut(w-35, y+12, "Max", textColor)
 		// }
 		// if i == 2 {
-			// c.TextOut(w-35, y+2, "Mid", textColor)
+		// c.TextOut(w-35, y+2, "Mid", textColor)
 		// }
 		// if i == 4 {
-			// c.TextOut(w-35, y-8, "Min", textColor)
+		// c.TextOut(w-35, y-8, "Min", textColor)
 		// }
 	}
 
@@ -2216,8 +2496,8 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 			// c.FillEllipse(x1-2, py1-2, 5, 5, precipColor) // Add Data Point
 
 			// if i == len(hourlyData)-2 { // Draw very last points
-				// c.FillEllipse(x2-2, ty2-2, 5, 5, tempColor)
-				// c.FillEllipse(x2-2, py2-2, 5, 5, precipColor)
+			// c.FillEllipse(x2-2, ty2-2, 5, 5, tempColor)
+			// c.FillEllipse(x2-2, py2-2, 5, 5, precipColor)
 			// }
 		}
 		c.TextOut(5, 2, "Environment: Temp (Red) / Rain% (Blue)", wui.RGB(200, 200, 200))
@@ -2264,8 +2544,12 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 			ey1 := int(float64(h-20) - (e1/90.0)*float64(h-20) + 10)
 			ey2 := int(float64(h-20) - (e2/90.0)*float64(h-20) + 10)
 
-			if ey1 > h { ey1 = h }
-			if ey2 > h { ey2 = h }
+			if ey1 > h {
+				ey1 = h
+			}
+			if ey2 > h {
+				ey2 = h
+			}
 
 			c.Line(x1, ey1, x2, ey2, sunColor)
 			c.FillEllipse(x1-2, ey1-2, 5, 5, sunColor) // Add Data Point
@@ -2355,8 +2639,12 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 		maxPrecip := 0.1
 		maxRad := 1.0
 		for _, d := range hourlyData {
-			if d.Precipitation > maxPrecip { maxPrecip = d.Precipitation }
-			if d.DirectRadiation > maxRad { maxRad = d.DirectRadiation }
+			if d.Precipitation > maxPrecip {
+				maxPrecip = d.Precipitation
+			}
+			if d.DirectRadiation > maxRad {
+				maxRad = d.DirectRadiation
+			}
 		}
 
 		for i := 0; i < len(hourlyData)-1; i++ {
@@ -2385,15 +2673,14 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 
 			c.Line(x1, sy1, x2, sy2, scoreColor)
 
-			
 			// c.FillEllipse(x1-2, py1-2, 4, 4, precipColor) // Add Data Point
 			// c.FillEllipse(x1-2, ry1-2, 4, 4, radColor) // Add Data Point
 			// c.FillEllipse(x1-2, sy1-2, 5, 5, scoreColor) // Add Data Point
-			
+
 			// if i == len(hourlyData)-2 {
-				// c.FillEllipse(x2-2, py2-2, 4, 4, precipColor)
-				// c.FillEllipse(x2-2, ry2-2, 4, 4, radColor)
-				// c.FillEllipse(x2-2, sy2-2, 5, 5, scoreColor)
+			// c.FillEllipse(x2-2, py2-2, 4, 4, precipColor)
+			// c.FillEllipse(x2-2, ry2-2, 4, 4, radColor)
+			// c.FillEllipse(x2-2, sy2-2, 5, 5, scoreColor)
 			// }
 		}
 		c.TextOut(5, 2, "ADV: Score(Yel), Sun(Orng), RainVol(Blu), Rad(Red)", wui.RGB(255, 255, 255))
@@ -2404,8 +2691,12 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 
 		minVal, maxVal := -10.0, 40.0
 		for _, d := range hourlyData {
-			if d.DewPoint2m < minVal { minVal = d.DewPoint2m }
-			if d.DewPoint2m > maxVal { maxVal = d.DewPoint2m }
+			if d.DewPoint2m < minVal {
+				minVal = d.DewPoint2m
+			}
+			if d.DewPoint2m > maxVal {
+				maxVal = d.DewPoint2m
+			}
 		}
 
 		for i := 0; i < len(hourlyData)-1; i++ {
@@ -2435,7 +2726,9 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 		solColor := wui.RGB(255, 220, 0)
 		maxRad := 1.0
 		for _, d := range hourlyData {
-			if d.DirectRadiation > maxRad { maxRad = d.DirectRadiation }
+			if d.DirectRadiation > maxRad {
+				maxRad = d.DirectRadiation
+			}
 		}
 
 		for i := 0; i < len(hourlyData)-1; i++ {
@@ -2471,11 +2764,19 @@ func onAnalysisCanvasPaint(c *wui.Canvas) {
 
 			spread1 := hourlyData[i].Temperature2m - hourlyData[i].DewPoint2m
 			risk1 := 0.0
-			if spread1 < 2 && hourlyData[i].RelativeHumidity2m > 80 { risk1 = 100.0 } else if spread1 < 5 { risk1 = 50.0 }
+			if spread1 < 2 && hourlyData[i].RelativeHumidity2m > 80 {
+				risk1 = 100.0
+			} else if spread1 < 5 {
+				risk1 = 50.0
+			}
 
 			spread2 := hourlyData[i+1].Temperature2m - hourlyData[i+1].DewPoint2m
 			risk2 := 0.0
-			if spread2 < 2 && hourlyData[i+1].RelativeHumidity2m > 80 { risk2 = 100.0 } else if spread2 < 5 { risk2 = 50.0 }
+			if spread2 < 2 && hourlyData[i+1].RelativeHumidity2m > 80 {
+				risk2 = 100.0
+			} else if spread2 < 5 {
+				risk2 = 50.0
+			}
 
 			ry1 := int(float64(h-20) - (risk1/100.0)*float64(h-20) + 10)
 			ry2 := int(float64(h-20) - (risk2/100.0)*float64(h-20) + 10)
@@ -2942,6 +3243,16 @@ func createUI() {
 	colorCanvas.SetBounds(526, 60, 119, 15)
 	colorCanvas.SetOnPaint(onColorCanvasPaint)
 	mainWindow.Add(colorCanvas)
+
+	mainWindow.SetOnKeyDown(func(key int) {
+		fmt.Println(key)
+		if key == int(wui.KeyL) {
+			showEasterEgg = !showEasterEgg
+			if mainCanvas != nil {
+				mainCanvas.Paint()
+			}
+		}
+	})
 }
 
 func runCLI(query string) {
@@ -3008,6 +3319,15 @@ func createQuickUI() {
 	mainCanvas.SetBounds(10, 55, 320, 175)
 	mainCanvas.SetOnPaint(onMainCanvasPaint)
 	mainWindow.Add(mainCanvas)
+
+	mainWindow.SetOnKeyDown(func(key int) {
+		if key == int(wui.KeyL) && w32.GetKeyState(w32.VK_CONTROL)&0x8000 != 0 {
+			showEasterEgg = !showEasterEgg
+			if mainCanvas != nil {
+				mainCanvas.Paint()
+			}
+		}
+	})
 }
 
 func runQuickMode() {

@@ -3,6 +3,7 @@
         "sky_day_day": [60, 18, 28],
         "sky_night": [18, 8, 14],
         "sky_sunset": [90, 22, 38],
+        "sky_sandstorm": [75, 35, 32],
         "ground_green_1": [28, 16, 20],
         "ground_green_2": [20, 10, 14],
         "ground_snow_1": [58, 40, 45],
@@ -11,10 +12,17 @@
         "ground_desert_2": [50, 25, 22],
         "ground_storm_1": [30, 18, 24],
         "ground_storm_2": [20, 10, 16],
+        "ground_autumn_1": [75, 30, 32],
+        "ground_autumn_2": [58, 20, 22],
+        "ground_spring_1": [32, 20, 24],
+        "ground_spring_2": [24, 14, 18],
+        "ground_winter_1": [55, 38, 42],
+        "ground_winter_2": [45, 30, 35],
         "cloud_white": [85, 55, 62],
         "cloud_light_gray": [60, 35, 42],
         "cloud_dark_gray": [38, 20, 28],
         "cloud_storm": [22, 10, 16],
+        "cloud_sandstorm": [80, 40, 38],
         "rain_drop": [210, 80, 100],
         "snow_drop": [140, 90, 100],
         "lightning": [250, 120, 100],
@@ -25,6 +33,18 @@
         "moon_crater": [140, 75, 85],
         "star": [220, 140, 130],
         "canvas_background": [12, 6, 10],
+        "sand_particle": [72, 38, 34],
+        "leaf_color_1": [28, 16, 20],
+        "leaf_color_2": [32, 20, 24],
+        "leaf_color_3": [38, 24, 28],
+        "blossom_color": [160, 80, 90],
+        "firefly_color": [255, 150, 110],
+        "frost_color": [130, 85, 95],
+        "heart_depth": [160, 20, 35],
+        "heart_main": [210, 30, 45],
+        "heart_shine": [250, 100, 110],
+        "noise_base": [14, 8, 12],
+        "info_text": [170, 100, 110],
         "rainbow_colors": [
             [200, 40, 55],
             [210, 70, 45],
@@ -34,6 +54,5 @@
             [130, 30, 70],
             [180, 25, 65]
         ]
-    },
-    "verifications": {}
+    }
 }
