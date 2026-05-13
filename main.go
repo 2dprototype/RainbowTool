@@ -236,6 +236,7 @@ var (
 
 	// easter egg
 	showEasterEgg bool
+	showTree bool
 
 	// render state optimization
 	currentRenderState    RenderState
@@ -1696,6 +1697,150 @@ func applySandbox() {
 	currentRenderState.IsBlizzard = currentRenderState.IsSnow && currentRenderState.TargetHour.WindSpeed10m > 30
 }
 
+
+func renderGeographicTree(c *wui.Canvas, w, h int, rs RenderState) {
+    // lat := rs.Lat
+    // lon := rs.Lon
+    temp := rs.TargetHour.Temperature2m
+    // humidity := rs.TargetHour.RelativeHumidity2m
+    wind := rs.TargetHour.WindSpeed10m
+    isDesert := rs.IsDesert
+    isSpring := rs.IsSpring
+    isAutumn := rs.IsAutumn
+    isWinter := rs.IsWinter
+    // isSummer := rs.IsSummer
+    isSnow := rs.IsSnow
+    isSandstorm := rs.IsSandstorm
+    // isBlizzard := rs.IsBlizzard
+    // isPrecipitating := rs.IsPrecipitating
+    isThunderstorm := rs.IsThunderstorm
+
+	var drawTree func(x, y float64, length float64, angle float64, depth int, maxDepth int)
+	drawTree = func(x, y float64, length float64, angle float64, depth int, maxDepth int) {
+		if depth == 0 {
+			return
+		}
+
+		rad := angle * math.Pi / 180.0
+		x2 := x + length*math.Cos(rad)
+		y2 := y - length*math.Sin(rad)
+
+		thickness := depth
+		trunkColor := wui.RGB(50, 35, 20)
+		
+		// React to environment lighting and conditions
+		if isSnow {
+			trunkColor = wui.RGB(70, 60, 50)
+		} else if isDesert {
+			trunkColor = wui.RGB(100, 80, 50)
+		}
+		if isThunderstorm && (animFrame%30 == 0 || animFrame%30 == 1) {
+			trunkColor = wui.RGB(100, 80, 60) // Lightning illumination
+		}
+
+		// Draw trunk/branch with thickness
+		for i := 0; i < thickness; i++ {
+			offsetX := float64(i - thickness/2)
+			c.Line(int(x+offsetX), int(y), int(x2+offsetX), int(y2), trunkColor)
+		}
+
+		// Leaves at branch tips
+		if depth <= 2 {
+			leafSize := 8
+			var leafColor wui.Color
+			showLeaves := true
+
+			// Enhanced seasonal leaf colors
+			if isAutumn {
+				// Autumn: Rich warm colors - deep orange, crimson, gold
+				autumnColors := []wui.Color{
+					wui.RGB(200, 80, 30),  // Burnt orange
+					wui.RGB(180, 60, 20),  // Rust
+					wui.RGB(210, 120, 40), // Golden orange
+					wui.RGB(190, 50, 30),  // Crimson
+				}
+				leafColor = autumnColors[(int(x2)+int(y2))%len(autumnColors)]
+			} else if isSpring {
+				// Spring: Fresh, bright greens with hints of yellow
+				springColors := []wui.Color{
+					wui.RGB(120, 180, 60),  // Fresh green
+					wui.RGB(100, 170, 50),  // Light green
+					wui.RGB(140, 190, 70),  // Yellow-green
+				}
+				leafColor = springColors[(int(x2)+int(y2))%len(springColors)]
+			} else if isWinter && temp < 5 {
+				if isSnow || temp < 0 {
+					leafColor = wui.RGB(180, 185, 195) // Frosty pale blue-gray
+					leafSize = 8
+				} else {
+					showLeaves = false // Bare tree in deep winter
+				}
+			} else {
+				// Summer: Lush, vibrant greens
+				summerColors := []wui.Color{
+					wui.RGB(34, 139, 34),  // Forest green
+					wui.RGB(50, 160, 50),  // Vibrant green
+					wui.RGB(40, 150, 40),  // Rich green
+				}
+				leafColor = summerColors[(int(x2)+int(y2))%len(summerColors)]
+			}
+			
+			if isDesert {
+				// Desert: Muted sage green and dusty olive
+				desertColors := []wui.Color{
+					wui.RGB(85, 105, 55),  // Sage green
+					wui.RGB(75, 95, 45),   // Dusty olive
+					wui.RGB(95, 115, 65),  // Pale sage
+				}
+				leafColor = desertColors[(int(x2)+int(y2))%len(desertColors)]
+				leafSize = 8
+			} 
+			
+			if isSnow || temp < 0 {
+				// Frozen desert leaves - ice crystals on sparse vegetation
+                frozenColors := []wui.Color{
+                    wui.RGB(180, 200, 210), // Pale icy blue
+                    wui.RGB(160, 185, 200), // Frosted sage
+                    wui.RGB(170, 190, 205), // Ice crystal white-blue
+                    wui.RGB(150, 175, 195), // Frozen olive
+                }
+                leafColor = frozenColors[(int(x2)+int(y2))%len(frozenColors)]
+                leafSize = 7 
+			} 
+
+			if showLeaves {
+				// Leaves rustle dynamically in the wind
+				rustleX := int(math.Sin(float64(animFrame)*0.1+x2) * (wind*0.1 + 1))
+				rustleY := int(math.Cos(float64(animFrame)*0.1+y2) * (wind*0.1 + 1))
+				c.FillEllipse(int(x2)+rustleX-leafSize/2, int(y2)+rustleY-leafSize/2, leafSize, leafSize, leafColor)
+				
+				// Add snow accumulation on branches in winter
+				if isWinter && (isSnow || temp < 0) {
+					snowColor := wui.RGB(240, 248, 255) // Snow white with slight blue
+					// Draw snow cap on top of leaf clusters
+					snowCapSize := leafSize / 2
+					c.FillEllipse(int(x2)+rustleX-leafSize/4, int(y2)+rustleY-leafSize/2, snowCapSize, snowCapSize, snowColor)
+					// Additional snow accumulation on the top edge
+					c.FillEllipse(int(x2)+rustleX, int(y2)+rustleY-leafSize/2-1, snowCapSize-1, snowCapSize-2, snowColor)
+				}
+			}
+		}
+
+		if depth > 1 {
+			// Calculate wind bending based on current frame, wind speed, and branch depth
+			bend := wind*0.15 + math.Sin(float64(animFrame)*0.05+float64(depth))*wind*0.05
+			if isSandstorm {
+				bend += 10 + math.Sin(float64(animFrame)*0.2)*10 // Violent shaking
+			}
+			
+			drawTree(x2, y2, length*0.75, angle-25-bend, depth-1, maxDepth)
+			drawTree(x2, y2, length*0.75, angle+20-bend, depth-1, maxDepth)
+		}
+	}
+
+	drawTree(float64(w-120), float64(h-48), 22.0, 90, 5, 5)
+}
+
 func onMainCanvasPaint(c *wui.Canvas) {
 	w, h := c.Size()
 
@@ -1923,6 +2068,11 @@ func onMainCanvasPaint(c *wui.Canvas) {
 	// Draw Ground
 	c.FillEllipse(-50, h-40, w/2+100, 100, GroundColor1)
 	c.FillEllipse(w/2-50, h-60, w/2+100, 150, GroundColor2)
+	
+
+	if showTree {
+		renderGeographicTree(c, w, h, rs)
+	}
 	
 	// Ground snow accumulation details
 	if rs.IsSnow || (rs.IsWinter && rs.TargetHour.Temperature2m < 0) {
@@ -2190,6 +2340,11 @@ func onDateSearchClick() {
 	
     if text == "egg" || text == "love" || text == "heart" {
         showEasterEgg = !showEasterEgg // Toggle the mode
+        return
+    }
+    
+	if text == "tree" {
+        showTree = !showTree // Toggle tree
         return
     }
 	
@@ -3648,6 +3803,8 @@ func createSandboxUI() {
 	mainWindow.SetOnKeyDown(func(key int) {
 		if key == int(wui.KeyL) && w32.GetKeyState(w32.VK_CONTROL)&0x8000 != 0 {
 			showEasterEgg = !showEasterEgg
+		} else if key == int(wui.KeyT) && w32.GetKeyState(w32.VK_CONTROL)&0x8000 != 0 {
+			showTree = !showTree
 		}
 	})
 }
